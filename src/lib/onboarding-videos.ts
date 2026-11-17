@@ -17,9 +17,9 @@ export type OnboardingStepIntro = {
 
 export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntro> = {
   identity: {
-    youtubeId: "17usJFjDYR0",
-    videoTitle: "Welcome: set up your business",
-    duration: "1:02",
+    youtubeId: "S8pxDs8WJ_k",
+    videoTitle: "Set up your business",
+    duration: "1:11",
     points: [
       "Your business name shows in client emails, your portal and your website.",
       "Client replies go to your contact email.",
@@ -27,9 +27,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   branding: {
-    youtubeId: "b6xgZPGAqrg",
+    youtubeId: "jFgNvlzXqG8",
     videoTitle: "Brand & look: logo, colors and theme",
-    duration: "0:57",
+    duration: "1:15",
     points: [
       "Your logo appears on your portal, emails and website.",
       "Colors style every button and link your clients see.",
@@ -37,9 +37,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   services: {
-    youtubeId: "mErKfhogtyo",
-    videoTitle: "Services: prices, time on site and travel fees",
-    duration: "1:09",
+    youtubeId: "T3m129jTMkA",
+    videoTitle: "Services: prices, time on site and instant estimates",
+    duration: "1:36",
     points: [
       "Clients pick these services when they request or book a shoot.",
       "Prices plus travel fees create the preliminary estimate they see right away.",
@@ -47,9 +47,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   booking: {
-    youtubeId: "m7v7Hvfzaqw",
+    youtubeId: "ICkrGlfaS04",
     videoTitle: "Booking & calendar: let clients pick a time",
-    duration: "0:57",
+    duration: "1:24",
     points: [
       "Choose whether you schedule shoots or clients book a time themselves.",
       "Clients only see times inside your working hours.",
@@ -57,9 +57,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   payments: {
-    youtubeId: "Hs7SiICE7C8",
-    videoTitle: "Get paid: connect Stripe",
-    duration: "0:54",
+    youtubeId: "JxhKb-zeqX0",
+    videoTitle: "Get paid: connect Stripe step by step",
+    duration: "1:47",
     points: [
       "Clients pay you directly by card or bank transfer.",
       "ShootPortal takes 0% of client payments.",
@@ -67,9 +67,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   landing: {
-    youtubeId: "_FTUWwmVk_I",
-    videoTitle: "Your website: make it yours",
-    duration: "0:53",
+    youtubeId: "Vz24mUN-L94",
+    videoTitle: "Your website: hero image, headline and more",
+    duration: "1:05",
     points: [
       "ShootPortal already built your website from your name, logo and services.",
       "The Book a Shoot button opens your request form.",
@@ -77,9 +77,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   finish: {
-    youtubeId: "nJprz68LtRw",
+    youtubeId: "cUDSsLn1SHA",
     videoTitle: "You're live: test your portal",
-    duration: "0:48",
+    duration: "0:52",
     points: [
       "Open your portal to see what clients see.",
       "Send yourself a test request to try the full flow.",

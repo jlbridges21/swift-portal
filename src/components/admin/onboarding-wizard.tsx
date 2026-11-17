@@ -96,7 +96,7 @@ const LATER_LINKS: Partial<Record<OnboardingStepId, string>> = {
 const THEMES: { mode: SurfaceMode; label: string }[] = [
   { mode: "light", label: "Light" },
   { mode: "dark", label: "Dark" },
-  { mode: "brand", label: "Brand color" },
+  { mode: "brand", label: "Primary color" },
 ];
 
 type SiteDraft = {
@@ -457,10 +457,9 @@ export function OnboardingWizard({
         </div>
       </nav>
 
-      <Card className="flex-1 shadow-sm">
-        <CardHeader className="space-y-4">
+      <Card className="shadow-sm">
+        <CardHeader>
           <CardTitle className="text-lg">{STEP_LABELS[step]}</CardTitle>
-          <StepIntro key={step} intro={ONBOARDING_STEP_INTROS[step]} />
         </CardHeader>
         <CardContent className="space-y-6">
           {step === "identity" && (
@@ -944,6 +943,11 @@ export function OnboardingWizard({
           )}
         </CardContent>
       </Card>
+
+      {/* Help for this step, under the card: collapsed until opened. */}
+      <div className="mt-4">
+        <StepIntro key={step} intro={ONBOARDING_STEP_INTROS[step]} />
+      </div>
     </div>
   );
 }
