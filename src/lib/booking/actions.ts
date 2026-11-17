@@ -171,13 +171,20 @@ export async function confirmAppointment(
 
   // Keep one Google event per appointment: the new row takes over the previous event id.
   if (previous?.googleEventId && proposalId) {
+    // Which account holds the event (v133); absent before the migration.
+    const owner = await ctx.db.from("shoot_proposals").select("google_owner_user_id").eq("id", previous.id).maybeSingle();
+    const ownerUserId = owner.error ? undefined : ((owner.data?.google_owner_user_id as string | null) ?? null);
     await ctx.db
       .from("shoot_proposals")
       .update({ google_event_id: null, google_sync_status: null, google_sync_error: null })
       .eq("id", previous.id);
     await ctx.db
       .from("shoot_proposals")
-      .update({ google_event_id: previous.googleEventId, google_calendar_id: previous.googleCalendarId })
+      .update({
+        google_event_id: previous.googleEventId,
+        google_calendar_id: previous.googleCalendarId,
+        ...(ownerUserId !== undefined ? { google_owner_user_id: ownerUserId } : {}),
+      })
       .eq("id", proposalId);
   }
 

@@ -43,6 +43,8 @@ import {
 import type { TeamProfileFields } from "@/lib/booking/team";
 import type { AssignmentWeights } from "@/lib/booking/settings";
 import { cn } from "@/lib/utils";
+import { MyGoogleCalendarButton } from "@/components/admin/booking/my-google-calendar";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 
 type DetailTab = "scheduling" | "profile" | "assignment";
 
@@ -150,6 +152,32 @@ export function TeamAvailabilityTab() {
             </p>
           ) : null}
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/** This person's own Google connection: theirs to connect, everyone else sees the status. */
+function OwnGoogleCalendarRow({ member, overview, onChanged }: { member: OverviewTeamMember; overview: BookingOverview; onChanged: () => void }) {
+  const own = overview.memberCalendars.find((c) => c.userId === member.userId) ?? null;
+  const isViewer = member.userId === overview.viewerUserId;
+  const first = member.name.split(" ")[0] || "They";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-subtle/40 px-3 py-2.5">
+      <div className="min-w-0 text-sm">
+        <p className="font-medium text-heading">{isViewer ? "Your own Google Calendar" : `${first}'s own Google Calendar`}</p>
+        <p className={cn("text-xs", own?.status === "needs_reconnect" ? "text-amber-700 surface-dark:text-amber-300" : "text-muted")}>
+          {!own
+            ? isViewer
+              ? "Not connected. Connect it so your appointments block bookings."
+              : `Not connected. ${first} can connect it from Calendar → My Google Calendar.`
+            : own.status === "needs_reconnect"
+              ? `Needs reconnecting (${own.email ?? "Google account"}). Not offered for bookings until then.`
+              : `Connected as ${own.email ?? "Google account"}.`}
+        </p>
+      </div>
+      {isViewer ? (
+        <MyGoogleCalendarButton label={own ? "Manage" : "Connect"} onClosed={onChanged} />
       ) : null}
     </div>
   );
@@ -393,21 +421,23 @@ function MemberEditor({
 
           <div className="grid gap-4 xl:grid-cols-2">
             <BookingCard icon={Home} title="Home / base address" description="Where their day starts and ends. Used for drive times and assignments.">
-              <input
+              <AddressAutocomplete
                 aria-label="Base address"
                 value={p.baseAddress}
-                placeholder={overview.businessAddress ?? "Business address"}
-                onChange={(e) => patch({ baseAddress: e.target.value })}
-                className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                placeholder={overview.businessAddress ?? "Start typing an address"}
+                onChange={(v) => patch({ baseAddress: v })}
+                onPick={(a) => patch({ baseAddress: a.formatted })}
+                inputClassName="h-10 bg-card"
               />
-              <p className="mt-1.5 text-xs text-muted">Leave empty to use the business address.</p>
+              <p className="mt-1.5 text-xs text-muted">Pick from the suggestions so drive times are accurate. Leave empty to use the business address.</p>
             </BookingCard>
 
             <BookingCard icon={CalendarCheck2} title="Availability & calendars" description="Keep availability up to date from Google Calendar.">
+              <OwnGoogleCalendarRow member={member} overview={overview} onChanged={onSaved} />
               {!overview.google.connected ? (
-                <p className="text-sm text-muted">Connect Google Calendar in Integrations to block busy times.</p>
+                <p className="mt-3 text-sm text-muted">Connect the business Google Calendar in Integrations to also block calendars shared with it.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="mt-3 space-y-3 border-t border-border pt-3">
                   <div>
                     <FieldLabel hint={member.role === "owner" ? "Adds to the business calendars in Instant Booking." : "Busy times here block this person."}>
                       Calendars that block availability

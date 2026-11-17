@@ -27,6 +27,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/shoot-reminders",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/w9-purge",
       "schedule": "45 16 * * *"
     },

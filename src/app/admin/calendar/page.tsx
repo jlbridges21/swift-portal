@@ -24,8 +24,8 @@ import {
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 import Link from "next/link";
 import { getBusinessOwnerUserId } from "@/lib/staff";
-import { loadTeam } from "@/lib/booking/team";
-import { computeCalendarTravelLegs } from "@/lib/booking/calendar-travel";
+import { loadTeam, resolveMember } from "@/lib/booking/team";
+import { computeCalendarTravelLegs, type CalendarLeg } from "@/lib/booking/calendar-travel";
 import type { CalendarTeamMember } from "@/components/admin/shoot-calendar";
 
 type ProposalRow = {
@@ -140,13 +140,26 @@ export default async function AdminCalendarPage() {
     return (result.data ?? []) as unknown as ProposalRow[];
   })();
   const ownerId = await getBusinessOwnerUserId(tenant.businessId);
-  const teamPromise = loadTeam(tenant.businessId).then(
-    (t) => t.members.map((m): CalendarTeamMember => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl, bookable: m.profile.bookable })),
+  const teamRaw = loadTeam(tenant.businessId);
+  const teamPromise = teamRaw.then(
+    (t) =>
+      t.members.map(
+        (m): CalendarTeamMember => ({
+          userId: m.userId,
+          name: m.name,
+          avatarUrl: m.avatarUrl,
+          bookable: m.profile.bookable,
+          color: settings.booking.teamColors[m.userId] ?? null,
+        })
+      ),
     () => [] as CalendarTeamMember[]
   );
-  // Drive time from the previous shoot (same photographer, same day) — Google Routes, cached.
-  const travelSource: Promise<Record<string, { minutes: number; miles: number }>> = proposalsPromise
-    .then((rows) => computeCalendarTravelLegs(db, rows, businessTimeZone, ownerId))
+  // Drive time around each shoot: from home or the previous shoot, and home after the last one.
+  const travelSource: Promise<Record<string, CalendarLeg>> = Promise.all([proposalsPromise, teamRaw])
+    .then(([rows, team]) => {
+      const bases = new Map(team.members.map((m) => [m.userId, resolveMember(m, settings).baseAddress]));
+      return computeCalendarTravelLegs(db, rows, businessTimeZone, ownerId, (userId) => (userId ? bases.get(userId) ?? null : null));
+    })
     .catch(() => ({}));
 
   const shootsSource: Promise<CalendarShootsResult> = proposalsPromise.then(

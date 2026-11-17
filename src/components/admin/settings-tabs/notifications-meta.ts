@@ -27,6 +27,8 @@ export const NOTIFICATION_STAGES: { id: string; title: string; keys: Notificatio
       "shoot_time_declined",
       "shoot_scheduled",
       "shoot_rescheduled",
+      "shoot_times_offered",
+      "shoot_reminder",
       "shoot_completed",
     ],
   },

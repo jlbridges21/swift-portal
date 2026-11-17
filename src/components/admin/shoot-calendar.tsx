@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -53,6 +53,7 @@ import { Switch } from "@/components/ui/switch";
 import { PersonAvatar, initialsOf } from "@/components/admin/booking/booking-ui";
 import { AppointmentModal } from "@/components/admin/booking/appointment-modal";
 import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/calendar-extras";
+import { MyGoogleCalendarButton } from "@/components/admin/booking/my-google-calendar";
 import {
   RescheduleConfirmModal,
   TIMED_RESCHEDULE_NOTE,
@@ -61,7 +62,9 @@ import {
   type DragApi,
   type WeekGridEvent,
 } from "@/components/admin/calendar/week-time-grid";
-import { externalEventWeekSegments, shootWeekSegment } from "@/lib/calendar-week";
+import { externalEventWeekSegments, shootMinutes, shootWeekSegment } from "@/lib/calendar-week";
+import type { CalendarLeg } from "@/lib/booking/calendar-travel";
+import { timeZoneName } from "@/lib/us-time-zones";
 import {
   SHOOT_EVENT_MINUTES,
   compactTime,
@@ -107,11 +110,23 @@ export interface CalendarShoot {
   assigned_user_id?: string | null;
 }
 
-export type CalendarTeamMember = { userId: string; name: string; avatarUrl: string | null; bookable: boolean };
+export type CalendarTeamMember = {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  bookable: boolean;
+  /** Business-wide calendar color (Settings → booking.teamColors); null = automatic. */
+  color?: string | null;
+};
 
-/** Drive time into a shoot from the same photographer's previous shoot that day. */
+const noopSubscribe = () => () => {};
+
+/** Distinct automatic colors for team members who haven't been given one (Google-like). */
+const TEAM_AUTO_COLORS = ["#2563EB", "#16A34A", "#EA580C", "#7C3AED", "#DB2777", "#0891B2", "#CA8A04", "#DC2626"] as const;
+
+/** Drive time around each shoot: in from home / the previous shoot, home after the last. */
 const CalendarTravelContext = createContext<{
-  travel: Record<string, { minutes: number; miles: number }>;
+  travel: Record<string, CalendarLeg>;
   showTravel: boolean;
   team: CalendarTeamMember[];
 }>({ travel: {}, showTravel: true, team: [] });
@@ -150,7 +165,7 @@ interface ShootCalendarProps {
   /** scheduling.confirm and not read-only impersonation. Drag-to-reschedule is hidden otherwise. */
   canReschedule?: boolean;
   teamSource?: Promise<CalendarTeamMember[]>;
-  travelSource?: Promise<Record<string, { minutes: number; miles: number }>>;
+  travelSource?: Promise<Record<string, CalendarLeg>>;
 }
 
 type SourceStatus = "loading" | "ready" | "error";
@@ -201,6 +216,11 @@ const CalendarPaintContext = createContext({
   colorFor(calendarId: string, fallback?: string | null) {
     return fallback || "#7C3AED";
   },
+  /** A shoot's color: its photographer's team color on team calendars, else the Shoots color. */
+  colorForShoot(shoot: Pick<CalendarShoot, "assigned_user_id">): string {
+    void shoot;
+    return SHOOTPORTAL_EVENT_COLOR;
+  },
 });
 
 const CALENDAR_COLOR_PRESETS = [
@@ -249,7 +269,8 @@ function ShootEventCard({
   const { travel: travelLegs, showTravel, team: teamList } = useContext(CalendarTravelContext);
   const legIn = travelLegs[shoot.id];
   const assignee = shoot.assigned_user_id ? teamList.find((m) => m.userId === shoot.assigned_user_id) : undefined;
-  const { shootColor } = useContext(CalendarPaintContext);
+  const { colorForShoot } = useContext(CalendarPaintContext);
+  const shootColor = colorForShoot(shoot);
   const solid = eventChipPaint(shootColor);
   const pendingPaint = pendingEventChipPaint(shootColor);
   const paint = pending ? pendingPaint : solid;
@@ -289,8 +310,11 @@ function ShootEventCard({
         )}
         style={{ ...chipStyle, outlineColor: paint.foreground }}
       >
-        {legIn && showTravel ? (
-          <span className="mb-0.5 flex items-center gap-1 text-[10px] opacity-80" title={`${legIn.minutes} min drive from the previous shoot (${legIn.miles} mi)`}>
+        {legIn && legIn.minutes > 0 && showTravel ? (
+          <span
+            className="mb-0.5 flex items-center gap-1 text-[10px] opacity-80"
+            title={`${legIn.minutes} min drive from ${legIn.from === "base" ? "home" : "the previous shoot"} (${legIn.miles} mi)`}
+          >
             <Car className="h-3 w-3" aria-hidden /> {legIn.minutes} min
           </span>
         ) : null}
@@ -754,12 +778,12 @@ function GoogleAllDayChip({ event, onOpen }: { event: ExternalCalendarEvent; onO
  */
 function weekBlockAppearance(
   item: WeekItem,
-  shootColor: string,
+  colorForShoot: (shoot: CalendarShoot) => string,
   colorFor: (calendarId: string, fallback?: string | null) => string,
   timeZone: string
 ) {
   if (item.kind === "shoot") {
-    const solid = eventChipPaint(shootColor).background;
+    const solid = eventChipPaint(colorForShoot(item.shoot)).background;
     const pending = item.shoot.proposal_status === "pending";
     return {
       className: "text-heading",
@@ -768,7 +792,7 @@ function weekBlockAppearance(
         backgroundColor: `color-mix(in srgb, ${solid} 16%, var(--color-card))`,
         ...(pending ? { outline: `1px dashed ${solid}`, outlineOffset: -1 } : {}),
       },
-      title: `${item.shoot.client_name} - ${item.shoot.project_name} · ${formatTimeRange(item.shoot.proposed_at, SHOOT_EVENT_MINUTES, timeZone)}${pending ? " · Pending" : ""}`,
+      title: `${item.shoot.client_name} - ${item.shoot.project_name} · ${formatTimeRange(item.shoot.proposed_at, shootMinutes(item.shoot.proposed_at, item.shoot.end_at), timeZone)}${pending ? " · Pending" : ""}`,
     };
   }
   const color = eventChipPaint(colorFor(item.event.calendarId, item.event.calendarColor), "#7C3AED").background;
@@ -795,14 +819,19 @@ export function ShootCalendar({
 }: ShootCalendarProps) {
   const router = useRouter();
   const [team, setTeam] = useState<CalendarTeamMember[]>([]);
-  const [travel, setTravel] = useState<Record<string, { minutes: number; miles: number }>>({});
+  const [travel, setTravel] = useState<Record<string, CalendarLeg>>({});
   const [hiddenStaff, setHiddenStaff] = useState<string[]>([]);
   const [showTravel, setShowTravel] = useState(true);
   const [bookOpen, setBookOpen] = useState(false);
   useStreamed(teamSource ?? null, setTeam);
   useStreamed(travelSource ?? null, setTravel);
   const deepLinkedRef = useRef(false);
-  const [view, setView] = useState<CalendarView>("month");
+  const [view, setView] = useState<CalendarView>("week");
+  const deviceZone = useSyncExternalStore(
+    noopSubscribe,
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    () => null
+  );
   const [anchor, setAnchor] = useState(new Date());
 
   // ── Sources: each fills in on its own; the grid never waits for them ──
@@ -1203,8 +1232,46 @@ export function ShootCalendar({
     },
     [calendarColors.calendars, canChooseColors]
   );
+  // Team colors: chosen ones win; everyone else gets a distinct automatic color in team order.
+  const teamColorOf = useCallback(
+    (userId: string) => {
+      const member = team.find((m) => m.userId === userId);
+      if (member?.color) return member.color;
+      const index = Math.max(0, team.findIndex((m) => m.userId === userId));
+      return TEAM_AUTO_COLORS[index % TEAM_AUTO_COLORS.length];
+    },
+    [team]
+  );
+  const colorForShoot = useCallback(
+    (shoot: Pick<CalendarShoot, "assigned_user_id">) =>
+      team.length > 1 && shoot.assigned_user_id ? teamColorOf(shoot.assigned_user_id) : shootColor,
+    [team.length, teamColorOf, shootColor]
+  );
+
+  async function persistTeamColor(userId: string, value: string | null) {
+    const previous = team;
+    setTeam((current) => current.map((m) => (m.userId === userId ? { ...m, color: value } : m)));
+    const res = await fetch("/api/admin/booking", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamColor: { userId, color: value } }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setTeam(previous);
+      const data = (await res?.json().catch(() => ({}))) as { error?: string };
+      toast.error(data.error || "Could not save the team color");
+    }
+  }
 
   async function persistColor(key: string, value: string | null) {
+    if (key.startsWith("team:")) {
+      if (value && !/^#[0-9a-f]{6}$/i.test(value)) {
+        toast.error("Team colors use a 6-digit hex color, like #2563EB.");
+        return;
+      }
+      return persistTeamColor(key.slice(5), value);
+    }
     setCalendarColors((current) => {
       const next: ViewerCalendarColorPrefs = {
         ...current,
@@ -1257,10 +1324,11 @@ export function ShootCalendar({
   const weekDayKeys = weekKeys(format(anchor, "yyyy-MM-dd"));
   const weekStartKey = weekDayKeys[0];
   const businessToday = todayKey(businessTimeZone);
+  const dayViewKey = format(anchor, "yyyy-MM-dd");
   const weekByDay = useMemo(() => {
     const map = new Map<string, WeekItem[]>();
-    if (view !== "week") return map;
-    const days = new Set(weekKeys(weekStartKey));
+    if (view !== "week" && view !== "day") return map;
+    const days = new Set(view === "day" ? [dayViewKey] : weekKeys(weekStartKey));
     const push = (item: WeekItem) => {
       if (!days.has(item.dayKey)) return;
       const list = map.get(item.dayKey);
@@ -1268,8 +1336,23 @@ export function ShootCalendar({
       else map.set(item.dayKey, [item]);
     };
     for (const shoot of visibleShoots) {
-      const seg = shootWeekSegment(shoot.proposed_at, businessTimeZone);
-      if (seg) push({ kind: "shoot", key: `shoot:${shoot.id}`, shoot, ...seg });
+      const seg = shootWeekSegment(shoot.proposed_at, businessTimeZone, shoot.end_at);
+      if (!seg) continue;
+      const leg = showTravel && shoot.proposal_status !== "pending" ? travel[shoot.id] : undefined;
+      const inMin = leg && leg.minutes > 0 ? leg.minutes : 0;
+      const outMin = leg?.out?.minutes ?? 0;
+      push({
+        kind: "shoot",
+        key: `shoot:${shoot.id}`,
+        shoot,
+        ...seg,
+        padBeforeMin: inMin,
+        padAfterMin: outMin,
+        padLabel: {
+          before: inMin ? `${inMin} min drive from ${leg?.from === "base" ? "home" : "previous shoot"}` : undefined,
+          after: outMin ? `${outMin} min drive home` : undefined,
+        },
+      });
     }
     for (const event of shownExternal) {
       const base = `google:${externalKey(event)}`;
@@ -1278,7 +1361,7 @@ export function ShootCalendar({
       }
     }
     return map;
-  }, [view, weekStartKey, visibleShoots, shownExternal, businessTimeZone]);
+  }, [view, weekStartKey, dayViewKey, visibleShoots, shownExternal, businessTimeZone, showTravel, travel]);
 
   const weekDrag: DragApi<WeekItem> = {
     canDrag: (item) => item.kind === "shoot" && canReschedule,
@@ -1326,12 +1409,14 @@ export function ShootCalendar({
   const menuValue =
     colorMenu?.key === "shoots"
       ? calendarColors.shoots || ""
-      : colorMenu
-        ? calendarColors.calendars?.[colorMenu.key] || ""
-        : "";
+      : colorMenu?.key.startsWith("team:")
+        ? team.find((m) => `team:${m.userId}` === colorMenu.key)?.color || ""
+        : colorMenu
+          ? calendarColors.calendars?.[colorMenu.key] || ""
+          : "";
 
   return (
-    <CalendarPaintContext.Provider value={{ shootColor, colorFor }}>
+    <CalendarPaintContext.Provider value={{ shootColor, colorFor, colorForShoot }}>
     <CalendarTravelContext.Provider value={{ travel, showTravel, team }}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <div className="min-w-0 md:hidden">
@@ -1444,7 +1529,24 @@ export function ShootCalendar({
                         }
                       />
                       <PersonAvatar name={m.name} url={m.avatarUrl} size={22} />
-                      <span className="truncate">{m.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                      {canChooseColors ? (
+                        <button
+                          type="button"
+                          data-color-trigger
+                          className="h-3.5 w-3.5 shrink-0 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                          style={{ backgroundColor: teamColorOf(m.userId) }}
+                          aria-label={`${m.name}'s calendar color`}
+                          aria-haspopup="dialog"
+                          aria-expanded={colorMenu?.key === `team:${m.userId}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            openColorMenu(event, `team:${m.userId}`, `${m.name}'s shoots`, teamColorOf(m.userId));
+                          }}
+                        />
+                      ) : (
+                        <span className="h-3.5 w-3.5 shrink-0 rounded-sm" style={{ backgroundColor: teamColorOf(m.userId) }} aria-hidden />
+                      )}
                     </label>
                   ))}
                 </div>
@@ -1565,12 +1667,23 @@ export function ShootCalendar({
             </div>
           </div>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
-            {canCreateShoot ? (
-              <Button type="button" variant="accent" className="min-h-11" onClick={() => setBookOpen(true)}>
-                <Plus className="h-4 w-4" /> Book shoot
-              </Button>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <MyGoogleCalendarButton className="min-h-11" />
+              {canCreateShoot ? (
+                <Button type="button" variant="accent" className="min-h-11" onClick={() => setBookOpen(true)}>
+                  <Plus className="h-4 w-4" /> Book shoot
+                </Button>
+              ) : null}
+            </div>
             {sourceStatus}
+            {deviceZone && deviceZone !== businessTimeZone ? (
+              <p className="text-xs text-amber-700 surface-dark:text-amber-300 sm:max-w-sm sm:text-right">
+                Times are in {timeZoneName(businessTimeZone)}, your business time zone (this device is on {timeZoneName(deviceZone)}).{" "}
+                <Link href="/admin/settings#settings-timezone" className="font-medium underline">
+                  Change
+                </Link>
+              </p>
+            ) : null}
             <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
               {canReschedule ? (
                 <span className="hidden md:inline">
@@ -1662,10 +1775,10 @@ export function ShootCalendar({
           </>
         )}
 
-        {view === "week" && (
+        {(view === "week" || view === "day") && (
           <WeekTimeGrid<WeekItem>
             className="h-[calc(var(--app-height,100dvh)-15rem)] min-h-[28rem] lg:h-auto lg:min-h-0 lg:flex-1"
-            days={weekDayKeys}
+            days={view === "day" ? [dayViewKey] : weekDayKeys}
             today={businessToday}
             byDay={weekByDay}
             timeZone={businessTimeZone}
@@ -1678,7 +1791,7 @@ export function ShootCalendar({
                 <GoogleAllDayChip event={item.event} onOpen={() => setOpenedExternal(item.event)} />
               ) : null
             }
-            blockAppearance={(item) => weekBlockAppearance(item, shootColor, colorFor, businessTimeZone)}
+            blockAppearance={(item) => weekBlockAppearance(item, colorForShoot, colorFor, businessTimeZone)}
             renderBlock={(item, roomy) =>
               item.kind === "shoot" ? (
                 <>
@@ -1686,7 +1799,9 @@ export function ShootCalendar({
                   {roomy ? (
                     <>
                       <span className="flex min-w-0 items-center gap-1 truncate opacity-80">
-                        <span className="tabular-nums">{compactTime(item.shoot.proposed_at, businessTimeZone)}</span>
+                        <span className="tabular-nums">
+                          {formatTimeRange(item.shoot.proposed_at, shootMinutes(item.shoot.proposed_at, item.shoot.end_at), businessTimeZone)}
+                        </span>
                         {item.shoot.proposal_status === "pending" ? <span className="font-semibold">· Pending</span> : null}
                         {item.shoot.google_sync_status === "error" ? <span className="font-semibold">· Sync</span> : null}
                       </span>
@@ -1708,20 +1823,6 @@ export function ShootCalendar({
           />
         )}
 
-        {view === "day" && (
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-            {(shootsByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).map((shoot) => (
-              <ShootEventCard key={shoot.id} shoot={shoot} variant="full" onOpen={() => openShoot(shoot)} />
-            ))}
-            {(externalByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).map((event) => (
-              <GoogleEventCard key={event.id} event={event} variant="full" onOpen={() => setOpenedExternal(event)} />
-            ))}
-            {(shootsByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).length === 0 &&
-            (externalByDay.get(format(anchor, "yyyy-MM-dd")) ?? []).length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted">Nothing scheduled.</p>
-            ) : null}
-          </div>
-        )}
 
         {view === "agenda" && (
           <div ref={agendaRef} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4 sm:p-6">

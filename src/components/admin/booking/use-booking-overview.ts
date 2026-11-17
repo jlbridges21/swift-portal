@@ -27,6 +27,8 @@ export type OverviewService = {
 };
 
 export type BookingOverview = {
+  viewerUserId: string;
+  memberCalendars: { userId: string; email: string | null; status: "active" | "needs_reconnect" }[];
   schemaReady: boolean;
   profilesReady: boolean;
   routesConfigured: boolean;

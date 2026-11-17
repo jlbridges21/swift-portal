@@ -15,6 +15,35 @@ import { resolveBusinessTimeZone, syncShootToGoogleSafe } from "@/lib/google-cal
 import { zonedDayKey } from "@/lib/google-calendar-pull";
 import { loadBookingContext, loadProjectBookingFacts } from "@/lib/booking/server";
 import { confirmAppointment } from "@/lib/booking/actions";
+import { acceptProposal } from "@/lib/booking/offers";
+
+/** Null before migration v132 (legacy accept continues). */
+async function acceptThroughEngine(
+  businessId: string,
+  projectId: string,
+  proposalId: string,
+  actor: { kind: "business" | "client"; userId: string }
+) {
+  const ctx = await loadBookingContext(businessId);
+  if (!ctx.schemaReady) return null;
+  const facts = await loadProjectBookingFacts(ctx, projectId);
+  if (!facts) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const result = await acceptProposal(ctx, facts, { proposalId, actor });
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        error:
+          actor.kind === "client"
+            ? "Sorry, that time was just taken. We've let the team know — please pick another time or book online."
+            : `Can't confirm that time: ${result.message}`,
+        code: result.code,
+        violations: result.violations ?? [],
+      },
+      { status: 409 }
+    );
+  }
+  return NextResponse.json({ success: true, status: "confirmed", id: result.proposalId });
+}
 
 /** Null when this proposal isn't a booking-engine appointment (legacy flow continues). */
 async function moveEngineAppointment(businessId: string, proposalId: string, proposedAt: string, actorId: string) {
@@ -292,6 +321,14 @@ export async function PATCH(request: Request) {
     if (proposal.status === "confirmed") {
       return NextResponse.json({ success: true, status: "confirmed", alreadyConfirmed: true });
     }
+
+    // With Instant Booking's schema, accepting books through the engine: rules, overlaps and
+    // the confirm function apply, so an accepted time can never double-book anyone.
+    const engineAccept = await acceptThroughEngine(businessId, proposal.project_id, id, {
+      kind: isAdmin ? "business" : "client",
+      userId: profile.id,
+    });
+    if (engineAccept) return engineAccept;
 
     await db
       .from("shoot_proposals")

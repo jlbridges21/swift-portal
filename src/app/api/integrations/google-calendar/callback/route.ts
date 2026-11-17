@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import {
   completeGoogleCalendarConnect,
+  completeMemberGoogleConnect,
   isGoogleCalendarCallbackHost,
   resolveGoogleCalendarReturnUrl,
   verifyOAuthState,
@@ -35,6 +36,26 @@ export async function GET(request: Request) {
   if (oauthError) return fail(oauthError);
   const code = url.searchParams.get("code");
   if (!code) return fail("missing_code");
+
+  if (state.kind === "member") {
+    // A team member's own calendar (Instant Booking). Back to where they started.
+    const back = state.returnPath || "/admin/calendar";
+    const sep = back.includes("?") ? "&" : "?";
+    try {
+      await completeMemberGoogleConnect({ businessId: state.businessId, userId: state.userId, code });
+    } catch {
+      return NextResponse.redirect(
+        resolveGoogleCalendarReturnUrl({
+          returnOrigin: state.returnOrigin,
+          businessPortalOrigin: portalOrigin,
+          path: `${back}${sep}mycal=error`,
+        })
+      );
+    }
+    return NextResponse.redirect(
+      resolveGoogleCalendarReturnUrl({ returnOrigin: state.returnOrigin, businessPortalOrigin: portalOrigin, path: `${back}${sep}mycal=connected` })
+    );
+  }
 
   try {
     await completeGoogleCalendarConnect({

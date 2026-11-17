@@ -66,6 +66,8 @@ export type NotificationEventKey =
   | "shoot_time_declined"
   | "shoot_scheduled"
   | "shoot_rescheduled"
+  | "shoot_reminder"
+  | "shoot_times_offered"
   | "shoot_completed"
   | "deliverables_ready"
   | "revision_requested"
@@ -247,6 +249,8 @@ export const NOTIFICATION_EVENT_DEFINITIONS: {
   { key: "shoot_time_declined", label: "Shoot time declined", description: "Client decline → admins only. Admin decline/withdraw → client (decline email template).", audience: "both" },
   { key: "shoot_scheduled", label: "Shoot scheduled", description: "Project moves to scheduled status.", audience: "client" },
   { key: "shoot_rescheduled", label: "Shoot rescheduled", description: "When a shoot is moved to a new date.", audience: "both" },
+  { key: "shoot_reminder", label: "Shoot reminder", description: "Reminder before a confirmed shoot (timing in Settings → Instant Booking). Goes to the client and the assigned photographer.", audience: "both" },
+  { key: "shoot_times_offered", label: "Shoot times offered", description: "When you offer the client a few times to pick from.", audience: "client" },
   { key: "shoot_completed", label: "Shoot completed", description: "When field work is marked complete.", audience: "client" },
   { key: "deliverables_ready", label: "Deliverables ready for review", description: "When media is ready for client review.", audience: "client" },
   { key: "revision_requested", label: "Revision requested", description: "Notifies admins of a new revision request.", audience: "admin" },

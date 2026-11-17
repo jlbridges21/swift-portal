@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
-import { getGoogleCalendarPublicStatus } from "@/lib/google-calendar";
+import { getGoogleCalendarPublicStatus, listMemberConnections } from "@/lib/google-calendar";
 import { bookingSchemaReady, loadServiceBookingRules } from "@/lib/booking/server";
 import { businessAddress, loadTeam, parseTeamProfile, resolveMember, saveTeamProfile } from "@/lib/booking/team";
 import { routesConfigured } from "@/lib/booking/routes";
-import { getAppSettings } from "@/lib/app-settings";
+import { getAppSettings, saveAppSettings } from "@/lib/app-settings";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
 import { listBusinessServices } from "@/lib/business-services";
 
@@ -22,16 +22,20 @@ export async function GET() {
   const businessId = tenant.businessId;
   const db = await createTenantServiceClient(businessId);
 
-  const [settings, schemaReady, team, google, rules, services] = await Promise.all([
+  const [settings, schemaReady, team, google, rules, services, memberCalendars] = await Promise.all([
     getAppSettings(businessId),
     bookingSchemaReady(db),
     loadTeam(businessId),
     getGoogleCalendarPublicStatus(businessId).catch(() => null),
     loadServiceBookingRules(db),
     listBusinessServices(businessId),
+    listMemberConnections(businessId),
   ]);
 
   return NextResponse.json({
+    viewerUserId: auth.profile.id,
+    /** Team members' own Google connections (no tokens). */
+    memberCalendars: memberCalendars.map((c) => ({ userId: c.userId, email: c.email, status: c.status })),
     schemaReady,
     profilesReady: team.profilesReady && schemaReady,
     routesConfigured: routesConfigured(),
@@ -74,6 +78,31 @@ export async function GET() {
       };
     }),
   });
+}
+
+/** Calendar color for one team member (Shoot Calendar → Team). Owner/admin; shared business-wide. */
+export async function PATCH(request: Request) {
+  const auth = await requireAdminApi({ adminOnly: true });
+  if (!auth.ok) return auth.response;
+  const tenant = await getTenantContext();
+  if (!tenant) return missingTenantResponse(auth.profile.role);
+  if (tenant.impersonating && !tenant.allowWrites) {
+    return NextResponse.json({ error: "Read-only session." }, { status: 403 });
+  }
+  const body = (await request.json().catch(() => null)) as { teamColor?: { userId?: unknown; color?: unknown } } | null;
+  const userId = typeof body?.teamColor?.userId === "string" ? body.teamColor.userId : "";
+  const color = body?.teamColor?.color;
+  if (color !== null && (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color))) {
+    return NextResponse.json({ error: "Use a hex color like #2563EB." }, { status: 400 });
+  }
+  const team = await loadTeam(tenant.businessId);
+  if (!team.members.some((m) => m.userId === userId)) return NextResponse.json({ error: "Team member not found." }, { status: 404 });
+  const settings = await getAppSettings(tenant.businessId);
+  const teamColors = { ...settings.booking.teamColors };
+  if (color === null) delete teamColors[userId];
+  else teamColors[userId] = (color as string).toUpperCase();
+  await saveAppSettings({ booking: { ...settings.booking, teamColors } }, auth.profile.id, tenant.businessId);
+  return NextResponse.json({ ok: true, teamColors });
 }
 
 /** Save one team member's scheduling profile. */

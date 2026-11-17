@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowDownWideNarrow,
+  BellRing,
   CalendarCheck2,
   CalendarClock,
   CalendarDays,
@@ -34,7 +35,7 @@ import {
   WeeklyHoursEditor,
 } from "@/components/admin/booking/booking-ui";
 import { calendarLabel, useBookingOverview } from "@/components/admin/booking/use-booking-overview";
-import { EVENT_TEMPLATE_FIELDS, type BookingSettings } from "@/lib/booking/settings";
+import { EVENT_TEMPLATE_FIELDS, REMINDER_LEAD_HOURS, type BookingSettings } from "@/lib/booking/settings";
 import { travelPricingExample } from "@/lib/booking/travel-pricing";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export function BookingTab() {
   const [showAdvancedTravel, setShowAdvancedTravel] = useState(false);
   const patch = (p: Partial<BookingSettings>) => setSettings((prev) => ({ ...prev, booking: { ...prev.booking, ...p } }));
   const patchEvents = (p: Partial<BookingSettings["events"]>) => patch({ events: { ...booking.events, ...p } });
+  const patchReminders = (p: Partial<BookingSettings["reminders"]>) => patch({ reminders: { ...booking.reminders, ...p } });
 
   const google = overview?.google;
   const calendars = google?.calendars ?? [];
@@ -212,9 +214,15 @@ export function BookingTab() {
                     onChange={(v) => patch({ calendarStrategy: v as BookingSettings["calendarStrategy"] })}
                     options={[
                       { value: "shared", label: "All team shoots go to this calendar" },
-                      { value: "individual", label: "Each photographer's own calendar (set in Team), else this one" },
+                      { value: "individual", label: "Each photographer's own calendar, else this one" },
                     ]}
                   />
+                ) : null}
+                {isTeam && booking.calendarStrategy === "individual" ? (
+                  <p className="text-xs text-muted">
+                    Photographers connect their own Google account from Calendar → My Google Calendar (or Team → their card).
+                    Until they do, their shoots go to the calendar set in Team, else this one.
+                  </p>
                 ) : null}
               </div>
             )}
@@ -428,6 +436,52 @@ export function BookingTab() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </BookingCard>
+
+            <BookingCard icon={BellRing} title="Shoot reminders" description="A reminder before every confirmed shoot." id="settings-booking-reminders">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <ToggleRow
+                    id="reminders-on"
+                    checked={booking.reminders.enabled}
+                    onChange={(v) => patchReminders({ enabled: v })}
+                    label="Send reminders"
+                  />
+                  <div className="flex items-center gap-2 text-xs text-muted">
+                    <NativeSelect
+                      ariaLabel="Reminder timing"
+                      className="w-32"
+                      disabled={!booking.reminders.enabled}
+                      value={String(booking.reminders.leadHours)}
+                      onChange={(v) => patchReminders({ leadHours: Number(v) })}
+                      options={REMINDER_LEAD_HOURS.map((h) => ({ value: String(h), label: `${h} hours` }))}
+                    />
+                    before the shoot
+                  </div>
+                </div>
+                <div className="space-y-2 border-t border-border pt-3">
+                  <ToggleRow
+                    id="reminders-client"
+                    checked={booking.reminders.notifyClient}
+                    disabled={!booking.reminders.enabled}
+                    onChange={(v) => patchReminders({ notifyClient: v })}
+                    label="Remind the client"
+                    description="Time, address and a link to reschedule within your notice limits."
+                  />
+                  <ToggleRow
+                    id="reminders-staff"
+                    checked={booking.reminders.notifyPhotographer}
+                    disabled={!booking.reminders.enabled}
+                    onChange={(v) => patchReminders({ notifyPhotographer: v })}
+                    label={isTeam ? "Remind the assigned photographer" : "Remind me"}
+                    description="Client, address and a link to the shoot on your calendar."
+                  />
+                </div>
+                <p className="text-xs text-muted">
+                  Shoots booked after the reminder time (for example, booked today for tomorrow) skip it: the confirmation already went
+                  out. Email, push and in-app channels follow Settings → Notifications → Shoot reminder.
+                </p>
               </div>
             </BookingCard>
           </div>

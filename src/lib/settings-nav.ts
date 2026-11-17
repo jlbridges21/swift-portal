@@ -51,7 +51,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: "contact",
     label: "Contact Information",
     description: "Email, phone, website, and mailing address.",
-    hashes: ["settings-contact"],
+    hashes: ["settings-contact", "settings-timezone"],
   },
   {
     id: "email",

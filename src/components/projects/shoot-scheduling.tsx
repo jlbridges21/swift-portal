@@ -22,9 +22,14 @@ interface ShootSchedulingProps {
   proposals: ShootProposal[];
   isAdmin: boolean;
   onUpdate: () => void;
+  /**
+   * Business view next to the booking card: only pending proposals (offered times and client
+   * suggestions) are handled here. Proposing and rescheduling go through the booking card.
+   */
+  pendingOnly?: boolean;
 }
 
-export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: ShootSchedulingProps) {
+export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate, pendingOnly = false }: ShootSchedulingProps) {
   const brand = usePortalBrand();
   const searchParams = useSearchParams();
   const focusPending = searchParams.get("scheduling") === "pending";
@@ -60,7 +65,10 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
       credentials: "include",
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error("Failed");
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || "Failed");
+    }
     return res;
   });
 
@@ -71,7 +79,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
   const pendingFromAdmin = pending.filter((p) => p.proposed_by === "admin");
   const pendingFromClient = pending.filter((p) => p.proposed_by === "client");
 
-  const canProposeNew = !confirmed && pending.length === 0;
+  const canProposeNew = !pendingOnly && !confirmed && pending.length === 0;
 
   const actionablePending = pending.filter(
     (p) =>
@@ -132,11 +140,12 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
     try {
       const res = await runPatch({ id, action: "accept" });
       if (res) {
-        toast.success("Shoot time approved!");
+        toast.success(isAdmin ? "Shoot booked" : "Your shoot is booked!");
         onUpdate();
       }
-    } catch {
-      toast.error("Failed to approve time");
+    } catch (err) {
+      toast.error(err instanceof Error && err.message !== "Failed" ? err.message : "Failed to approve time");
+      onUpdate();
     } finally {
       setActionId(null);
     }
@@ -266,7 +275,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
           </div>
         )}
 
-        {confirmed && (
+        {confirmed && !pendingOnly && (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -359,7 +368,11 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         {isAdmin && pendingFromAdmin.length > 0 && pendingFromClient.length === 0 && (
           <div className="flex items-start gap-3 rounded-lg border border-slate-200 surface-dark:border-border bg-slate-50 surface-dark:bg-subtle p-4 text-sm text-muted">
             <Clock className="h-5 w-5 shrink-0 mt-0.5" />
-            <p>Waiting for the client to respond to your proposed shoot time.</p>
+            <p>
+              {pendingFromAdmin.length > 1
+                ? `Waiting for the client to pick one of the ${pendingFromAdmin.length} times you offered.`
+                : "Waiting for the client to respond to your proposed shoot time."}
+            </p>
           </div>
         )}
 
@@ -392,7 +405,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
             {isAdmin && p.proposed_by === "admin" && (
               <div className="mt-3">
                 <Button variant="outline" size="sm" className="min-h-11" onClick={() => declineProposal(p.id)}>
-                  <X className="h-4 w-4" /> Withdraw Proposal
+                  <X className="h-4 w-4" /> {pendingFromAdmin.length > 1 ? "Withdraw this time" : "Withdraw Proposal"}
                 </Button>
               </div>
             )}
@@ -416,7 +429,11 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
         );
         })}
 
-        {proposals.length === 0 && !showForm && (
+        {!isAdmin && pendingFromAdmin.length > 1 && (
+          <p className="text-sm font-medium text-heading">Pick the time that works best — the others are released automatically.</p>
+        )}
+
+        {proposals.length === 0 && !showForm && !pendingOnly && (
           <p className="text-sm text-muted text-center py-4">
             {isAdmin
               ? "Propose a shoot date and time for the client to confirm."

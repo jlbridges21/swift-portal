@@ -18,6 +18,7 @@ export type CalendarProjectInput = {
   status: ProjectStatus;
   shoot_date: string | null;
   confirmedShootAt?: string | null;
+  confirmedShootEndAt?: string | null;
 };
 
 export type ProjectCalendarEvent<T extends CalendarProjectInput = CalendarProjectInput> = {
@@ -60,6 +61,13 @@ export function todayKey(timeZone: string, now: Date = new Date()): string {
   return zonedDayAndMinutes(now, timeZone)?.dayKey ?? now.toISOString().slice(0, 10);
 }
 
+/** Booked length of a shoot; one hour for legacy proposals without an end. */
+function bookedMinutes(startIso: string, endIso?: string | null): number {
+  const start = Date.parse(startIso);
+  const end = endIso ? Date.parse(endIso) : NaN;
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.round((end - start) / 60_000) : SHOOT_EVENT_MINUTES;
+}
+
 /** Build calendar events; unscheduled projects are left out (never placed on a made-up day). */
 export function projectCalendarEvents<T extends CalendarProjectInput>(projects: T[], timeZone: string): ProjectCalendarEvent<T>[] {
   const events: ProjectCalendarEvent<T>[] = [];
@@ -72,7 +80,7 @@ export function projectCalendarEvents<T extends CalendarProjectInput>(projects: 
         dayKey: z.dayKey,
         allDay: false,
         startMin: z.minutes,
-        endMin: Math.min(24 * 60, z.minutes + SHOOT_EVENT_MINUTES),
+        endMin: Math.min(24 * 60, z.minutes + bookedMinutes(project.confirmedShootAt, project.confirmedShootEndAt)),
         startIso: project.confirmedShootAt,
       });
     } else if (project.shoot_date && YMD.test(project.shoot_date.slice(0, 10))) {
