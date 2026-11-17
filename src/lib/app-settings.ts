@@ -490,7 +490,9 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     ),
     portfolio: mergePortfolioSettings(stored.portfolio),
     tax: sanitizeTaxInformation(stored.tax, false),
-    travel: mergeTravelSettings(stored.travel),
+    // ZIP-centroid travel is retired: its settings are carried into booking.travel (Google
+    // Routes) below and never applied again, so "enabled" is always false from here on.
+    travel: { ...mergeTravelSettings(stored.travel), enabled: false },
     booking: mergeBookingWithLegacyTravel(stored.booking, stored.travel),
     marketingKit: mergeMarketingKitSettings(stored.marketingKit),
     setupAcceptedDefaults: {

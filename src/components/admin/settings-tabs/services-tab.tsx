@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Car, ChevronUp, Plus, Zap } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -11,28 +11,12 @@ import {
 } from "@/components/admin/booking/services-scheduling";
 import { SectionHeading, useSettingsTab } from "@/components/admin/settings-tabs/shared";
 import { ServicesTabBridgeProvider } from "@/components/admin/settings-tabs/services-tab-context";
-import { readCleanHash } from "@/lib/url-hash";
 import { cn } from "@/lib/utils";
 
 function UnsavedChip() {
   return (
     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 surface-dark:bg-amber-500/15 surface-dark:text-amber-300">
       Unsaved
-    </span>
-  );
-}
-
-function OnOffPill({ on }: { on: boolean }) {
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-        on
-          ? "bg-emerald-50 text-emerald-700 surface-dark:bg-emerald-500/15 surface-dark:text-emerald-300"
-          : "bg-subtle text-muted"
-      )}
-    >
-      {on ? "On" : "Off"}
     </span>
   );
 }
@@ -51,58 +35,10 @@ function RowIcon({ children, accent }: { children: ReactNode; accent?: boolean }
   );
 }
 
-/** Opens the travel editor when a deep link (#settings-travel-fees or a field inside it) targets it. */
-function useHashOpens(sectionId: string, open: () => void) {
-  useEffect(() => {
-    let timer = 0;
-    const sync = () => {
-      const hash = readCleanHash();
-      if (!hash) return;
-      const el = document.getElementById(hash);
-      const hit = hash === sectionId || hash.startsWith(`${sectionId}-`) || Boolean(el?.closest(`#${CSS.escape(sectionId)}`));
-      if (!hit) return;
-      open();
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: "start" }), 200);
-    };
-    sync();
-    window.addEventListener("hashchange", sync);
-    window.addEventListener("portal:hash-target", sync);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("hashchange", sync);
-      window.removeEventListener("portal:hash-target", sync);
-    };
-  }, [sectionId, open]);
-}
-
-const openTravelKey = "admin-settings-travel-fees";
-
 export function ServicesTab() {
-  const { settings, requestFormDirty, travelDirty, patchTravel, patchProposals, services } = useSettingsTab();
+  const { settings, requestFormDirty, patchProposals, services } = useSettingsTab();
   const [addRequest, setAddRequest] = useState(0);
   const bridge = useMemo(() => ({ addRequest }), [addRequest]);
-  const [travelOpen, setTravelOpen] = useState(false);
-  const travelOn = settings.travel.enabled;
-
-  // Remember an open travel editor for this browser tab session (as the old collapsible did).
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem(openTravelKey) === "1") setTravelOpen(true);
-    } catch {
-      /* private mode */
-    }
-  }, []);
-  function setTravel(next: boolean) {
-    setTravelOpen(next);
-    try {
-      sessionStorage.setItem(openTravelKey, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }
-  const openTravel = useMemo(() => () => setTravelOpen(true), []);
-  useHashOpens("settings-travel-fees", openTravel);
 
   return (
     <div id="settings-services" tabIndex={-1} className="scroll-mt-24 space-y-4">

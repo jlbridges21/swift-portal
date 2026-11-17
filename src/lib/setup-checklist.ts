@@ -37,7 +37,7 @@ export async function loadSetupChecklistSnapshot(
   const completedAt = biz?.setup_checklist_completed_at ?? null;
   if (completedAt) {
     const travelDone =
-      appSettings.travel.enabled === true || appSettings.setupAcceptedDefaults.travel === true;
+      appSettings.booking.travel.model !== "none" || appSettings.setupAcceptedDefaults.travel === true;
     if (travelDone) return { items: [], incomplete: false, completedAt };
     return {
       items: [
