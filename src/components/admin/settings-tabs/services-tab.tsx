@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Car, ChevronUp, Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { TravelFeesEditor } from "@/components/admin/travel-fees-card";
+import {
+  CombinedBookingCard,
+  RoutesTravelFeesCard,
+  ServiceSchedulingRules,
+} from "@/components/admin/booking/services-scheduling";
 import { SectionHeading, useSettingsTab } from "@/components/admin/settings-tabs/shared";
 import { ServicesTabBridgeProvider } from "@/components/admin/settings-tabs/services-tab-context";
 import { readCleanHash } from "@/lib/url-hash";
@@ -145,62 +149,12 @@ export function ServicesTab() {
         <ServicesTabBridgeProvider value={bridge}>{services}</ServicesTabBridgeProvider>
       </section>
 
-      <section
-        id="settings-travel-fees"
-        tabIndex={-1}
-        className="scroll-mt-24 overflow-hidden rounded-2xl border border-border bg-card outline-none"
-      >
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4 sm:flex-nowrap sm:gap-4 sm:px-6">
-          <RowIcon>
-            <Car className="h-4 w-4" />
-          </RowIcon>
-          <div className="min-w-0 flex-1">
-            <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-heading">
-              Travel fees
-              {travelDirty ? <UnsavedChip /> : null}
-            </p>
-            <p className="mt-0.5 text-[13px] text-muted">Charge by distance from your home base.</p>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <OnOffPill on={travelOn} />
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              aria-expanded={travelOpen}
-              aria-controls="settings-travel-fees-panel"
-              onClick={() => setTravel(!travelOpen)}
-            >
-              {travelOpen ? (
-                <>
-                  <ChevronUp className="h-4 w-4" /> Close
-                </>
-              ) : travelOn ? (
-                "Edit"
-              ) : (
-                "Set up"
-              )}
-            </Button>
-          </div>
-        </div>
-        {travelOpen ? (
-          <div
-            id="settings-travel-fees-panel"
-            role="region"
-            aria-label="Travel fees"
-            className="border-t border-border px-5 py-5 sm:px-6"
-          >
-            <TravelFeesEditor
-              travel={settings.travel}
-              postalCode={settings.business.postalCode}
-              onChange={patchTravel}
-              heading=""
-              description=""
-              showTierDiagram
-            />
-          </div>
-        ) : null}
-      </section>
+      <ServiceSchedulingRules />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <CombinedBookingCard />
+        <RoutesTravelFeesCard />
+      </div>
     </div>
   );
 }

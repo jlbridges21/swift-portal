@@ -4,8 +4,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { buildPreliminaryEstimatePayload } from "@/lib/business-services";
 import { getAppSettings, addProposalExpiration } from "@/lib/app-settings";
-import { decidePreliminaryTravel } from "@/lib/preliminary-travel";
-import type { ZipQuery } from "@/lib/zip-distance";
+import { travelSnapshotForRequest } from "@/lib/booking/server";
 import { logWorkflowSkipped } from "@/lib/workflow";
 import {
   buildConsolidatedEstimatePayload,
@@ -41,6 +40,8 @@ export async function createPreliminaryEstimate(
      * combined estimate; omitted / one keeps the single-service estimate.
      */
     templates?: ServiceTemplate[];
+    /** Travel snapshot already computed by the request (so Routes is called once). */
+    travel?: Awaited<ReturnType<typeof travelSnapshotForRequest>>;
   }
 ) {
   if (!serviceType?.trim()) {
@@ -77,6 +78,7 @@ export async function createPreliminaryEstimate(
     appSettings,
     db: db as unknown as TravelEstimateDb,
     templates: options?.templates,
+    travel: options?.travel,
   });
   const expiresAt = addProposalExpiration(
     new Date(),
@@ -145,7 +147,6 @@ type TravelEstimateDb = {
       };
     };
   };
-  raw: ZipQuery;
 };
 
 async function buildPreliminaryEstimateWithTravel(input: {
@@ -155,6 +156,7 @@ async function buildPreliminaryEstimateWithTravel(input: {
   appSettings: Awaited<ReturnType<typeof getAppSettings>>;
   db: TravelEstimateDb;
   templates?: ServiceTemplate[];
+  travel?: Awaited<ReturnType<typeof travelSnapshotForRequest>>;
 }) {
   const { projectId, serviceType, businessId, appSettings, db } = input;
   const brand = {
@@ -174,23 +176,24 @@ async function buildPreliminaryEstimateWithTravel(input: {
     .eq("business_id", businessId)
     .maybeSingle();
 
-  const decision = await decidePreliminaryTravel({
-    settings: appSettings.travel,
-    businessPostalCode: appSettings.business.postalCode,
-    businessCountry: appSettings.business.country,
+  // Google Routes driving distance (replaces ZIP-centroid travel). Snapshot only: the
+  // saved estimate and the project keep these numbers even if settings change later.
+  const decision = input.travel ?? (await travelSnapshotForRequest({
+    businessId,
+    settings: appSettings,
     propertyAddress: project?.property_address ?? null,
+    servicesRequireQuote: false,
     hidePricing: built.hidePricing,
-    db: db.raw,
-  });
+  }));
 
-  if (decision.notifyReason) {
-    await logWorkflowSkipped(projectId, decision.notifyReason);
+  if (decision.note) {
+    await logWorkflowSkipped(projectId, decision.note);
     await notifyAdmins({
       businessId,
       projectId,
       type: "status_changed",
-      title: "Travel fee was not added",
-      body: decision.notifyReason,
+      title: "Travel fee needs a look",
+      body: decision.note,
       link: `/admin/projects/${projectId}#quote`,
     });
   }
@@ -205,8 +208,8 @@ async function buildPreliminaryEstimateWithTravel(input: {
     line_items: lineItems,
     total_cents: built.total_cents + (decision.lineItem?.amount_cents ?? 0),
     notes: built.notes,
-    travelActive: decision.active,
-    oneWayMiles: decision.oneWayMiles,
+    travelActive: appSettings.booking.travel.model !== "none",
+    oneWayMiles: decision.miles,
     services: built.services,
   };
 }
