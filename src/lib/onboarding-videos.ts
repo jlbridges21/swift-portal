@@ -17,9 +17,9 @@ export type OnboardingStepIntro = {
 
 export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntro> = {
   identity: {
-    youtubeId: null,
+    youtubeId: "17usJFjDYR0",
     videoTitle: "Welcome: set up your business",
-    duration: "",
+    duration: "1:02",
     points: [
       "Your business name shows in client emails, your portal and your website.",
       "Client replies go to your contact email.",
@@ -27,9 +27,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   branding: {
-    youtubeId: null,
+    youtubeId: "b6xgZPGAqrg",
     videoTitle: "Brand & look: logo, colors and theme",
-    duration: "",
+    duration: "0:57",
     points: [
       "Your logo appears on your portal, emails and website.",
       "Colors style every button and link your clients see.",
@@ -37,9 +37,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   services: {
-    youtubeId: null,
+    youtubeId: "mErKfhogtyo",
     videoTitle: "Services: prices, time on site and travel fees",
-    duration: "",
+    duration: "1:09",
     points: [
       "Clients pick these services when they request or book a shoot.",
       "Prices plus travel fees create the preliminary estimate they see right away.",
@@ -47,9 +47,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   booking: {
-    youtubeId: null,
+    youtubeId: "m7v7Hvfzaqw",
     videoTitle: "Booking & calendar: let clients pick a time",
-    duration: "",
+    duration: "0:57",
     points: [
       "Choose whether you schedule shoots or clients book a time themselves.",
       "Clients only see times inside your working hours.",
@@ -57,9 +57,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   payments: {
-    youtubeId: null,
+    youtubeId: "Hs7SiICE7C8",
     videoTitle: "Get paid: connect Stripe",
-    duration: "",
+    duration: "0:54",
     points: [
       "Clients pay you directly by card or bank transfer.",
       "ShootPortal takes 0% of client payments.",
@@ -67,9 +67,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   landing: {
-    youtubeId: null,
+    youtubeId: "_FTUWwmVk_I",
     videoTitle: "Your website: make it yours",
-    duration: "",
+    duration: "0:53",
     points: [
       "ShootPortal already built your website from your name, logo and services.",
       "The Book a Shoot button opens your request form.",
@@ -77,9 +77,9 @@ export const ONBOARDING_STEP_INTROS: Record<OnboardingStepId, OnboardingStepIntr
     ],
   },
   finish: {
-    youtubeId: null,
+    youtubeId: "nJprz68LtRw",
     videoTitle: "You're live: test your portal",
-    duration: "",
+    duration: "0:48",
     points: [
       "Open your portal to see what clients see.",
       "Send yourself a test request to try the full flow.",
