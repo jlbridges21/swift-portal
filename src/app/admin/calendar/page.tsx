@@ -23,6 +23,23 @@ import {
 } from "@/lib/google-calendar";
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 import Link from "next/link";
+import { getBusinessOwnerUserId } from "@/lib/staff";
+import { loadTeam } from "@/lib/booking/team";
+import { computeCalendarTravelLegs } from "@/lib/booking/calendar-travel";
+import type { CalendarTeamMember } from "@/components/admin/shoot-calendar";
+
+type ProposalRow = {
+  id: string;
+  project_id: string;
+  proposed_at: string;
+  status: string;
+  google_sync_status: string | null;
+  google_sync_error: string | null;
+  end_at?: string | null;
+  assigned_user_id?: string | null;
+  booking_source?: string | null;
+  projects: unknown;
+};
 
 type ProposalProject = {
   project_name: string;
@@ -102,21 +119,35 @@ export default async function AdminCalendarPage() {
   // ── Streamed sources (started now, not awaited) ──────────────────────────
   // Every confirmed/pending shoot: a small set per business (20 rows / ~10 KB measured), so it
   // stays one query; month/week navigation then needs no further shoot requests.
+  const BASE_COLUMNS =
+    "id, project_id, proposed_at, status, google_sync_status, google_sync_error, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))";
   const proposalsPromise = (async () => {
-    let query = db
-      .from("shoot_proposals")
-      .select(
-        "id, project_id, proposed_at, status, google_sync_status, google_sync_error, projects(project_name, property_address, service_type, status, cover_image_id, cover_image_url, clients(name))"
-      )
-      .in("status", ["confirmed", "pending"])
-      .order("proposed_at", { ascending: true });
-    if (projectIds !== "all") {
-      query = query.in("project_id", projectIds.length === 0 ? NO_MATCH : projectIds);
-    }
-    const { data, error } = await query;
-    if (error) throw new Error("shoots unavailable");
-    return data ?? [];
+    const run = async (columns: string) => {
+      let query = db
+        .from("shoot_proposals")
+        .select(columns)
+        .in("status", ["confirmed", "pending"])
+        .order("proposed_at", { ascending: true });
+      if (projectIds !== "all") {
+        query = query.in("project_id", projectIds.length === 0 ? NO_MATCH : projectIds);
+      }
+      return query;
+    };
+    // Instant Booking columns (v132) when available; the calendar works without them.
+    let result = await run(`${BASE_COLUMNS}, end_at, assigned_user_id, booking_source`);
+    if (result.error) result = await run(BASE_COLUMNS);
+    if (result.error) throw new Error("shoots unavailable");
+    return (result.data ?? []) as unknown as ProposalRow[];
   })();
+  const ownerId = await getBusinessOwnerUserId(tenant.businessId);
+  const teamPromise = loadTeam(tenant.businessId).then(
+    (t) => t.members.map((m): CalendarTeamMember => ({ userId: m.userId, name: m.name, avatarUrl: m.avatarUrl, bookable: m.profile.bookable })),
+    () => [] as CalendarTeamMember[]
+  );
+  // Drive time from the previous shoot (same photographer, same day) — Google Routes, cached.
+  const travelSource: Promise<Record<string, { minutes: number; miles: number }>> = proposalsPromise
+    .then((rows) => computeCalendarTravelLegs(db, rows, businessTimeZone, ownerId))
+    .catch(() => ({}));
 
   const shootsSource: Promise<CalendarShootsResult> = proposalsPromise.then(
     (rows) => ({
@@ -127,6 +158,8 @@ export default async function AdminCalendarPage() {
           id: item.id,
           project_id: item.project_id,
           proposed_at: item.proposed_at,
+          end_at: item.end_at ?? null,
+          assigned_user_id: item.assigned_user_id ?? (item.end_at !== undefined ? ownerId : null),
           proposal_status: item.status === "pending" ? "pending" : "confirmed",
           google_sync_status: item.google_sync_status,
           google_sync_error: item.google_sync_error,
@@ -234,6 +267,8 @@ export default async function AdminCalendarPage() {
           businessTimeZone={businessTimeZone}
           canCreateShoot={canCreateShoot}
           canReschedule={canReschedule}
+          teamSource={teamPromise}
+          travelSource={travelSource}
         />
       </main>
     </div>

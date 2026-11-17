@@ -46,7 +46,13 @@ import {
   PanelLeft,
   Loader2,
   RefreshCw,
+  Car,
+  Plus,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { PersonAvatar, initialsOf } from "@/components/admin/booking/booking-ui";
+import { AppointmentModal } from "@/components/admin/booking/appointment-modal";
+import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/calendar-extras";
 import {
   RescheduleConfirmModal,
   TIMED_RESCHEDULE_NOTE,
@@ -96,7 +102,19 @@ export interface CalendarShoot {
   service_type: string;
   status: string;
   cover_url: string | null;
+  /** Instant Booking (v132): appointment end and assigned team member. */
+  end_at?: string | null;
+  assigned_user_id?: string | null;
 }
+
+export type CalendarTeamMember = { userId: string; name: string; avatarUrl: string | null; bookable: boolean };
+
+/** Drive time into a shoot from the same photographer's previous shoot that day. */
+const CalendarTravelContext = createContext<{
+  travel: Record<string, { minutes: number; miles: number }>;
+  showTravel: boolean;
+  team: CalendarTeamMember[];
+}>({ travel: {}, showTravel: true, team: [] });
 
 type CalendarView = "month" | "week" | "day" | "agenda";
 type EventCardVariant = "full" | "compact" | "pill" | "week";
@@ -131,6 +149,8 @@ interface ShootCalendarProps {
   canCreateShoot?: boolean;
   /** scheduling.confirm and not read-only impersonation. Drag-to-reschedule is hidden otherwise. */
   canReschedule?: boolean;
+  teamSource?: Promise<CalendarTeamMember[]>;
+  travelSource?: Promise<Record<string, { minutes: number; miles: number }>>;
 }
 
 type SourceStatus = "loading" | "ready" | "error";
@@ -226,6 +246,9 @@ function ShootEventCard({
     : format(parseISO(shoot.proposed_at), "h:mm a");
   const pending = shoot.proposal_status === "pending";
   const title = `${shoot.client_name} - ${shoot.project_name}`;
+  const { travel: travelLegs, showTravel, team: teamList } = useContext(CalendarTravelContext);
+  const legIn = travelLegs[shoot.id];
+  const assignee = shoot.assigned_user_id ? teamList.find((m) => m.userId === shoot.assigned_user_id) : undefined;
   const { shootColor } = useContext(CalendarPaintContext);
   const solid = eventChipPaint(shootColor);
   const pendingPaint = pendingEventChipPaint(shootColor);
@@ -266,7 +289,19 @@ function ShootEventCard({
         )}
         style={{ ...chipStyle, outlineColor: paint.foreground }}
       >
-        <span className="truncate text-[11px] font-semibold leading-tight">{title}</span>
+        {legIn && showTravel ? (
+          <span className="mb-0.5 flex items-center gap-1 text-[10px] opacity-80" title={`${legIn.minutes} min drive from the previous shoot (${legIn.miles} mi)`}>
+            <Car className="h-3 w-3" aria-hidden /> {legIn.minutes} min
+          </span>
+        ) : null}
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold leading-tight">{title}</span>
+          {assignee && teamList.length > 1 ? (
+            <span className="shrink-0 rounded-full bg-white/80 px-1 text-[9px] font-bold text-slate-700" title={assignee.name}>
+              {initialsOf(assignee.name)}
+            </span>
+          ) : null}
+        </span>
         <span className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[10px]">
           <span className="tabular-nums">{time}</span>
           <span aria-hidden="true">·</span>
@@ -755,8 +790,18 @@ export function ShootCalendar({
   businessTimeZone = "America/New_York",
   canCreateShoot = false,
   canReschedule = false,
+  teamSource,
+  travelSource,
 }: ShootCalendarProps) {
   const router = useRouter();
+  const [team, setTeam] = useState<CalendarTeamMember[]>([]);
+  const [travel, setTravel] = useState<Record<string, { minutes: number; miles: number }>>({});
+  const [hiddenStaff, setHiddenStaff] = useState<string[]>([]);
+  const [showTravel, setShowTravel] = useState(true);
+  const [bookOpen, setBookOpen] = useState(false);
+  useStreamed(teamSource ?? null, setTeam);
+  useStreamed(travelSource ?? null, setTravel);
+  const deepLinkedRef = useRef(false);
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(new Date());
 
@@ -820,6 +865,15 @@ export function ShootCalendar({
   const [googleOpen, setGoogleOpen] = useState(true);
   const [openedExternal, setOpenedExternal] = useState<ExternalCalendarEvent | null>(null);
   const [selected, setSelected] = useState<CalendarShoot | null>(null);
+  // Notification links: /admin/calendar?shoot=<proposal id> opens that shoot once it has loaded.
+  useEffect(() => {
+    if (deepLinkedRef.current || !shoots.length) return;
+    const id = new URLSearchParams(window.location.search).get("shoot");
+    if (!id) return;
+    deepLinkedRef.current = true;
+    const match = shoots.find((s) => s.id === id);
+    if (match) setSelected(match);
+  }, [shoots]);
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -834,13 +888,15 @@ export function ShootCalendar({
 
   const shownShoots = useMemo(
     () =>
-      shoots.map((s) => {
-        const moved = moves[s.id];
-        const cover = covers[s.project_id];
-        if (!moved && cover === undefined) return s;
-        return { ...s, ...(moved ? { proposed_at: moved } : {}), ...(cover !== undefined ? { cover_url: cover } : {}) };
-      }),
-    [shoots, moves, covers]
+      shoots
+        .filter((s) => !s.assigned_user_id || !hiddenStaff.includes(s.assigned_user_id))
+        .map((s) => {
+          const moved = moves[s.id];
+          const cover = covers[s.project_id];
+          if (!moved && cover === undefined) return s;
+          return { ...s, ...(moved ? { proposed_at: moved } : {}), ...(cover !== undefined ? { cover_url: cover } : {}) };
+        }),
+    [shoots, moves, covers, hiddenStaff]
   );
   const sortedShoots = useMemo(
     () => [...shownShoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
@@ -1276,6 +1332,7 @@ export function ShootCalendar({
 
   return (
     <CalendarPaintContext.Provider value={{ shootColor, colorFor }}>
+    <CalendarTravelContext.Provider value={{ travel, showTravel, team }}>
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <div className="min-w-0 md:hidden">
         <div className="mb-2 empty:hidden">{sourceStatus}</div>
@@ -1371,6 +1428,37 @@ export function ShootCalendar({
                   />
                 ) : null}
               </div>
+            </div>
+
+            {team.length > 1 ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold text-heading">Team</p>
+                <div className="space-y-1">
+                  {team.map((m) => (
+                    <label key={m.userId} className="flex h-8 min-w-0 items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={!hiddenStaff.includes(m.userId)}
+                        onChange={(e) =>
+                          setHiddenStaff((prev) => (e.target.checked ? prev.filter((x) => x !== m.userId) : [...prev, m.userId]))
+                        }
+                      />
+                      <PersonAvatar name={m.name} url={m.avatarUrl} size={22} />
+                      <span className="truncate">{m.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="mb-1 text-xs font-semibold text-heading">Display</p>
+              <label className="flex h-8 items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <Car className="h-3.5 w-3.5 text-muted" aria-hidden /> Show drive time
+                </span>
+                <Switch checked={showTravel} onCheckedChange={setShowTravel} aria-label="Show drive time" />
+              </label>
             </div>
 
             {canLoadExternal ? (
@@ -1477,6 +1565,11 @@ export function ShootCalendar({
             </div>
           </div>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+            {canCreateShoot ? (
+              <Button type="button" variant="accent" className="min-h-11" onClick={() => setBookOpen(true)}>
+                <Plus className="h-4 w-4" /> Book shoot
+              </Button>
+            ) : null}
             {sourceStatus}
             <p className="text-xs leading-relaxed text-muted sm:max-w-sm sm:text-right">
               {canReschedule ? (
@@ -1515,6 +1608,15 @@ export function ShootCalendar({
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
+
+        {(view === "week" || view === "day") ? (
+          <DayRouteSummary
+            dayKey={selectedDayKey}
+            shoots={sortedShoots}
+            timeZone={businessTimeZone}
+            travel={travel}
+          />
+        ) : null}
 
         {view === "month" && (
           <>
@@ -1677,7 +1779,27 @@ export function ShootCalendar({
       </div>
       </div>
 
-      <Modal open={!!selected} onClose={() => setSelected(null)} title="Scheduled Shoot">
+      <AppointmentModal
+        projectId={selected && selected.proposal_status !== "pending" ? selected.project_id : null}
+        open={Boolean(selected && selected.proposal_status !== "pending")}
+        onClose={() => setSelected(null)}
+        onChanged={() => router.refresh()}
+      />
+      {canCreateShoot ? (
+        <BookShootDialog
+          open={bookOpen}
+          onClose={() => setBookOpen(false)}
+          projects={createProjects}
+          timeZone={businessTimeZone}
+          team={team.filter((m) => m.bookable).map((m) => ({ userId: m.userId, name: m.name }))}
+          onBooked={() => {
+            setBookOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      <Modal open={!!selected && selected.proposal_status === "pending"} onClose={() => setSelected(null)} title="Scheduled Shoot">
         {selected && (
           <div className="space-y-5">
             <p className="text-xs font-medium text-blue-700">ShootPortal</p>
@@ -1799,6 +1921,7 @@ export function ShootCalendar({
         onClose={() => setColorMenu(null)}
       />
     ) : null}
+    </CalendarTravelContext.Provider>
     </CalendarPaintContext.Provider>
   );
 }

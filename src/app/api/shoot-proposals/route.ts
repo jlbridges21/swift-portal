@@ -13,6 +13,37 @@ import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessage
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import { resolveBusinessTimeZone, syncShootToGoogleSafe } from "@/lib/google-calendar";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
+import { loadBookingContext, loadProjectBookingFacts } from "@/lib/booking/server";
+import { confirmAppointment } from "@/lib/booking/actions";
+
+/** Null when this proposal isn't a booking-engine appointment (legacy flow continues). */
+async function moveEngineAppointment(businessId: string, proposalId: string, proposedAt: string, actorId: string) {
+  const ctx = await loadBookingContext(businessId);
+  if (!ctx.schemaReady) return null;
+  const { data: row } = await ctx.db
+    .from("shoot_proposals")
+    .select("id, project_id, end_at, status, assigned_user_id, appointment_key")
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (!row || !row.end_at || row.status !== "confirmed" || row.appointment_key !== "primary") return null;
+  const facts = await loadProjectBookingFacts(ctx, row.project_id as string);
+  if (!facts) return null;
+  const startMs = Date.parse(proposedAt);
+  if (!Number.isFinite(startMs)) return NextResponse.json({ error: "Invalid proposed_at" }, { status: 400 });
+  const result = await confirmAppointment(ctx, facts, {
+    startMs,
+    userId: (row.assigned_user_id as string | null) ?? null,
+    source: "manual",
+    actor: { kind: "business", userId: actorId },
+  });
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: `Can't move the shoot there: ${result.message} Open the shoot to choose another time or override.`, violations: result.violations ?? [] },
+      { status: 409 }
+    );
+  }
+  return NextResponse.json({ success: true, proposed_at: result.start, id: result.proposalId });
+}
 
 export async function GET(request: Request) {
   const profile = await getProfile();
@@ -339,6 +370,12 @@ export async function PATCH(request: Request) {
     if (Number.isNaN(new Date(proposed_at).getTime())) {
       return NextResponse.json({ error: "Invalid proposed_at" }, { status: 400 });
     }
+
+    // Booking-engine appointments (v132) move through the same rules as every other booking:
+    // hours, buffers, drive time, daily limits, conflicts. Conflicts are refused here; an
+    // owner/admin can override from the appointment modal.
+    const engineMove = await moveEngineAppointment(businessId, id, String(proposed_at), profile.id);
+    if (engineMove) return engineMove;
 
     const appSettings = await getAppSettings(businessId);
     const scheduling = appSettings.workflow.scheduling;
