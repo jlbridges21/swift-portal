@@ -1,5 +1,7 @@
 import {
   BadgeInfo,
+  CalendarClock,
+  UserRoundCog,
   Bell,
   Contact,
   CreditCard,
@@ -32,6 +34,8 @@ export const SETTINGS_SECTION_ICONS: Record<SettingsSectionId, LucideIcon> = {
   new_project_setup: FolderPlus,
   payments: CreditCard,
   services: Tag,
+  booking: CalendarClock,
+  team: UserRoundCog,
   workflow: Workflow,
   notifications: Bell,
   integrations: Plug,

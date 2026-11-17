@@ -200,7 +200,7 @@ export function buildSetupChecklistItems(input: {
       id: "travel",
       label: "Travel fees",
       hash: "settings-travel-fees",
-      done: settings.travel.enabled === true || acceptedDefault(settings, "travel"),
+      done: settings.booking.travel.model !== "none" || acceptedDefault(settings, "travel"),
       acceptDefaultKey: "travel",
       optional: true,
     },

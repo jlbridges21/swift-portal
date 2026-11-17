@@ -12,9 +12,11 @@
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createTenantServiceClient } from "@/lib/supabase/tenant-service";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getAppSettings } from "@/lib/app-settings";
+import { buildEventText } from "@/lib/booking/event-template";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
-import { isPlatformApexHostname } from "@/lib/portal-url";
+import { getBusinessPortalOriginById, isPlatformApexHostname } from "@/lib/portal-url";
 import { decryptCalendarSecret, encryptCalendarSecret } from "@/lib/google-calendar-crypto";
 import { isSafeCssColor } from "@/lib/brand-color";
 import {
@@ -533,6 +535,16 @@ async function accessTokenFor(businessId: string, transport: FetchLike): Promise
   return { ok: true, token: bundle.accessToken, calendarId: row.calendar_id || "primary", row };
 }
 
+/** Live access token for the business connection (refreshed when needed). Instant Booking uses it. */
+export async function getGoogleCalendarAccess(
+  businessId: string,
+  transport: FetchLike = fetch
+): Promise<{ ok: true; token: string; defaultCalendarId: string; email: string | null } | { ok: false; error: string }> {
+  const auth = await accessTokenFor(businessId, transport);
+  if (!auth.ok) return auth;
+  return { ok: true, token: auth.token, defaultCalendarId: auth.calendarId, email: auth.row.connected_email ?? null };
+}
+
 export function resolveBusinessTimeZone(raw: string | null | undefined): {
   timeZone: string;
   usedFallback: boolean;
@@ -576,7 +588,11 @@ export type GoogleEventDraft = {
   summary: string;
   description: string;
   startIso: string;
+  /** Defaults to start + 1 hour (legacy proposals have no end). */
+  endIso?: string | null;
   timeZone: string;
+  location?: string | null;
+  attendees?: { email: string; displayName?: string }[];
 };
 
 export async function upsertGoogleEvent(
@@ -584,24 +600,30 @@ export async function upsertGoogleEvent(
   draft: GoogleEventDraft,
   transport: FetchLike = fetch
 ): Promise<{ eventId: string; created: boolean; htmlLink: string | null }> {
-  const endIso = new Date(Date.parse(draft.startIso) + EVENT_DURATION_MS).toISOString();
+  const endIso = draft.endIso || new Date(Date.parse(draft.startIso) + EVENT_DURATION_MS).toISOString();
   const schedule = {
     start: { dateTime: formatGoogleDateTime(draft.startIso, draft.timeZone), timeZone: draft.timeZone },
     end: { dateTime: formatGoogleDateTime(endIso, draft.timeZone), timeZone: draft.timeZone },
   };
-  // Updates patch title and time only. Description, reminders, iCalUID, and
-  // other Google fields stay on the existing event.
-  const createBody = {
+  // Instant Booking owns title, description, location and attendees (Settings → Instant
+  // Booking → Google Calendar event). Reminders, colors and other Google-side edits stay.
+  const managed = {
     summary: draft.summary,
     description: draft.description,
+    ...(draft.location !== undefined ? { location: draft.location ?? "" } : {}),
+    ...(draft.attendees !== undefined ? { attendees: draft.attendees } : {}),
+  };
+  const createBody = {
+    ...managed,
     iCalUID: shootIcalUid(draft.proposalId),
     ...schedule,
     extendedProperties: { private: { shootPortalProposalId: draft.proposalId } },
   };
   const updateBody = {
-    summary: draft.summary,
+    ...managed,
     ...schedule,
   };
+  const sendUpdates = draft.attendees?.length ? "?sendUpdates=all" : "";
   const cal = encodeURIComponent(draft.calendarId || "primary");
   const headers = {
     Authorization: `Bearer ${accessToken}`,
@@ -610,7 +632,7 @@ export async function upsertGoogleEvent(
 
   if (draft.existingEventId) {
     const res = await transport(
-      `https://www.googleapis.com/calendar/v3/calendars/${cal}/events/${encodeURIComponent(draft.existingEventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${cal}/events/${encodeURIComponent(draft.existingEventId)}${sendUpdates}`,
       { method: "PATCH", headers, body: JSON.stringify(updateBody) }
     );
     if (res.ok) {
@@ -622,7 +644,7 @@ export async function upsertGoogleEvent(
     }
   }
 
-  const insert = await transport(`https://www.googleapis.com/calendar/v3/calendars/${cal}/events`, {
+  const insert = await transport(`https://www.googleapis.com/calendar/v3/calendars/${cal}/events${sendUpdates}`, {
     method: "POST",
     headers,
     body: JSON.stringify(createBody),
@@ -668,7 +690,12 @@ export async function deleteGoogleEvent(
 async function setSync(
   businessId: string,
   proposalId: string,
-  patch: { google_event_id?: string | null; google_sync_status: string; google_sync_error: string | null }
+  patch: {
+    google_event_id?: string | null;
+    google_sync_status: string;
+    google_sync_error: string | null;
+    google_calendar_id?: string | null;
+  }
 ) {
   const db = await createTenantServiceClient(businessId);
   await db
@@ -689,6 +716,55 @@ export function shootGoogleEventSummary(args: {
   return base;
 }
 
+type PushRow = {
+  id: string;
+  project_id: string;
+  proposed_at: string;
+  status: string;
+  google_event_id: string | null;
+  end_at?: string | null;
+  assigned_user_id?: string | null;
+  google_calendar_id?: string | null;
+  projects?: unknown;
+};
+
+const PUSH_COLUMNS_BASE =
+  "id, project_id, proposed_at, status, google_event_id, projects(project_name, property_address, service_type, clients(name, full_name, email, phone))";
+const PUSH_COLUMNS_V132 = `${PUSH_COLUMNS_BASE}, end_at, assigned_user_id, google_calendar_id`;
+
+async function loadPushRow(businessId: string, proposalId: string): Promise<{ row: PushRow | null; v132: boolean }> {
+  const db = await createTenantServiceClient(businessId);
+  const extended = await db.from("shoot_proposals").select(PUSH_COLUMNS_V132).eq("id", proposalId).maybeSingle();
+  if (!extended.error) return { row: (extended.data as unknown as PushRow | null) ?? null, v132: true };
+  const base = await db.from("shoot_proposals").select(PUSH_COLUMNS_BASE).eq("id", proposalId).maybeSingle();
+  return { row: (base.data as unknown as PushRow | null) ?? null, v132: false };
+}
+
+/**
+ * Which Google calendar an appointment belongs on. "individual" strategy sends a team
+ * member's shoots to their own calendar (when set); everything else goes to the business
+ * destination calendar, then the connection's calendar.
+ */
+async function destinationCalendarFor(
+  businessId: string,
+  settings: Awaited<ReturnType<typeof getAppSettings>>,
+  assignedUserId: string | null | undefined,
+  connectionCalendarId: string
+): Promise<string> {
+  const booking = settings.booking;
+  if (booking.calendarStrategy === "individual" && assignedUserId) {
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db
+      .from("team_scheduling_profiles")
+      .select("destination_calendar_id")
+      .eq("user_id", assignedUserId)
+      .maybeSingle();
+    const own = !error ? (data?.destination_calendar_id as string | null) : null;
+    if (own?.trim()) return own.trim();
+  }
+  return booking.destinationCalendarId.trim() || connectionCalendarId || "primary";
+}
+
 export async function pushConfirmedShoot(
   businessId: string,
   proposalId: string,
@@ -701,12 +777,7 @@ export async function pushConfirmedShoot(
     });
     return { ok: false, error: "forced_fail" };
   }
-  const db = await createTenantServiceClient(businessId);
-  const { data: proposal } = await db
-    .from("shoot_proposals")
-    .select("id, project_id, proposed_at, status, google_event_id, projects(project_name, property_address, clients(name))")
-    .eq("id", proposalId)
-    .maybeSingle();
+  const { row: proposal, v132 } = await loadPushRow(businessId, proposalId);
   if (!proposal) return { ok: false, error: "not_found" };
   const syncable = proposal.status === "confirmed" || proposal.status === "pending";
   if (!syncable) {
@@ -728,36 +799,102 @@ export async function pushConfirmedShoot(
 
   const settings = await getAppSettings(businessId);
   const tz = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone);
-  const project = proposal.projects as unknown as {
+  const project = proposal.projects as {
     project_name?: string;
     property_address?: string;
-    clients?: { name?: string } | null;
+    service_type?: string;
+    clients?: { name?: string; full_name?: string; email?: string; phone?: string } | null;
   } | null;
-  const summary = shootGoogleEventSummary({
-    status: proposal.status,
-    clientName: project?.clients?.name,
-    projectName: project?.project_name,
+
+  const raw = await createServiceClient();
+  const db = await createTenantServiceClient(businessId);
+  const [staffProfile, serviceLinks, portalOrigin] = await Promise.all([
+    proposal.assigned_user_id
+      ? raw
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", proposal.assigned_user_id)
+          .maybeSingle()
+          .then((r) => r.data as { full_name?: string | null; email?: string | null } | null)
+      : Promise.resolve(null),
+    db
+      .from("project_services")
+      .select("service_name, position")
+      .eq("project_id", proposal.project_id)
+      .order("position", { ascending: true })
+      .then((r) => (r.error ? [] : (r.data ?? []))),
+    getBusinessPortalOriginById(businessId).catch(() => null),
+  ]);
+  const services = serviceLinks.length
+    ? serviceLinks.map((s) => s.service_name as string).join(", ")
+    : project?.service_type ?? "";
+  const clientName = project?.clients?.full_name || project?.clients?.name || "Client";
+  const durationMinutes = proposal.end_at
+    ? Math.round((Date.parse(proposal.end_at) - Date.parse(proposal.proposed_at)) / 60_000)
+    : 60;
+  const events = settings.booking.events;
+  const text = buildEventText({
+    settings: events,
+    values: {
+      property_address: project?.property_address ?? "",
+      client_name: clientName,
+      client_phone: project?.clients?.phone ?? "",
+      client_email: project?.clients?.email ?? "",
+      project_name: project?.project_name ?? "Project",
+      services,
+      photographer: staffProfile?.full_name || "",
+      duration_minutes: durationMinutes,
+      business_name: settings.business.businessName,
+    },
+    projectUrl: portalOrigin ? `${portalOrigin.replace(/\/$/, "")}/admin/projects/${proposal.project_id}` : null,
+    pending: proposal.status === "pending",
   });
   const description = [
-    project?.clients?.name ? `Client: ${project.clients.name}` : null,
-    project?.property_address ? `Address: ${project.property_address}` : null,
-    "Scheduled in ShootPortal (1 hour).",
+    text.description,
     tz.usedFallback ? `Timezone fell back to ${tz.timeZone} because the business timezone was unset or invalid.` : null,
   ]
     .filter(Boolean)
     .join("\n");
+
+  const attendees: { email: string; displayName?: string }[] = [];
+  if (proposal.status === "confirmed") {
+    const staffEmail = staffProfile?.email?.trim();
+    if (events.inviteAssignedStaff && staffEmail && staffEmail.toLowerCase() !== (auth.row.connected_email ?? "").toLowerCase()) {
+      attendees.push({ email: staffEmail, displayName: staffProfile?.full_name || undefined });
+    }
+    const clientEmail = project?.clients?.email?.trim();
+    if (events.inviteClient && clientEmail) attendees.push({ email: clientEmail, displayName: clientName });
+  }
+
+  const targetCalendar = v132
+    ? await destinationCalendarFor(businessId, settings, proposal.assigned_user_id, auth.calendarId)
+    : auth.calendarId;
+  let existingEventId = proposal.google_event_id;
+  const previousCalendar = proposal.google_calendar_id || auth.calendarId;
+  // Reassigned to someone whose shoots live on another calendar: move the event.
+  if (existingEventId && v132 && previousCalendar !== targetCalendar) {
+    try {
+      await deleteGoogleEvent(auth.token, previousCalendar, existingEventId, transport);
+    } catch {
+      // The old event may already be gone; the new one is still created below.
+    }
+    existingEventId = null;
+  }
 
   try {
     const result = await upsertGoogleEvent(
       auth.token,
       {
         proposalId,
-        calendarId: auth.calendarId,
-        existingEventId: proposal.google_event_id,
-        summary,
+        calendarId: targetCalendar,
+        existingEventId,
+        summary: text.summary,
         description,
         startIso: proposal.proposed_at,
+        endIso: proposal.end_at ?? null,
         timeZone: tz.timeZone,
+        location: v132 ? text.location : undefined,
+        attendees: v132 ? attendees : undefined,
       },
       transport
     );
@@ -765,6 +902,7 @@ export async function pushConfirmedShoot(
       google_event_id: result.eventId,
       google_sync_status: "synced",
       google_sync_error: null,
+      ...(v132 ? { google_calendar_id: targetCalendar } : {}),
     });
     return { ok: true, eventId: result.eventId, created: result.created };
   } catch (err) {
@@ -782,12 +920,7 @@ export async function removeShootEvent(
   proposalId: string,
   transport: FetchLike = fetch
 ): Promise<{ ok: true; eventId: string; created: boolean } | { ok: false; error: string }> {
-  const db = await createTenantServiceClient(businessId);
-  const { data: proposal } = await db
-    .from("shoot_proposals")
-    .select("id, google_event_id")
-    .eq("id", proposalId)
-    .maybeSingle();
+  const { row: proposal } = await loadPushRow(businessId, proposalId);
   if (!proposal?.google_event_id) return { ok: false, error: "no_event" };
   const auth = await accessTokenFor(businessId, transport);
   if (!auth.ok) {
@@ -798,7 +931,7 @@ export async function removeShootEvent(
     return { ok: false, error: auth.error };
   }
   try {
-    await deleteGoogleEvent(auth.token, auth.calendarId, proposal.google_event_id, transport);
+    await deleteGoogleEvent(auth.token, proposal.google_calendar_id || auth.calendarId, proposal.google_event_id, transport);
     await setSync(businessId, proposalId, {
       google_event_id: null,
       google_sync_status: "synced",

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ColorField } from "@/components/ui/color-field";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
-import { TravelFeesOnboarding } from "@/components/admin/travel-fees-card";
+import { TravelFeesOnboarding } from "@/components/admin/booking/travel-onboarding";
 import { StripeConnectCard } from "@/components/admin/stripe-connect-card";
 import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-preview-frame";
 import { SiteHome } from "@/components/website/site-home";
@@ -469,8 +469,8 @@ export function OnboardingWizard({
                 <legend className="px-1 text-sm font-medium text-heading">Business address (optional)</legend>
                 <p className="text-xs text-muted">
                   {addressFocus
-                    ? "Add your ZIP / postal code so travel fees can be measured from your location, then continue back to Services."
-                    : "Used to measure travel fees from your location. You can add it later in Settings → Contact Information."}
+                    ? "Add your business address so travel fees can use real driving distance, then continue back to Services."
+                    : "Used for driving distance (travel fees and scheduling). You can add it later in Settings → Contact Information."}
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="ob-address1">Street address</Label>

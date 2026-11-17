@@ -50,6 +50,8 @@ import {
   type TravelSettings,
 } from "@/lib/travel-fee";
 
+import { bookingSettingsError, mergeBookingSettings, type BookingSettings } from "@/lib/booking/settings";
+
 export type { WorkflowSettings } from "@/lib/workflow-settings";
 
 export type NotificationEventKey =
@@ -215,7 +217,10 @@ export interface AppSettings {
    */
   tax: TaxInformationSettings;
   /** Travel fees for distant jobs. Off until a business turns it on. */
+  /** @deprecated ZIP-centroid travel fees. Kept so stored settings still parse; Instant Booking's `booking.travel` replaced it. */
   travel: TravelSettings;
+  /** Instant Booking, scheduling rules, Google Calendar events and Routes-based travel fees. */
+  booking: BookingSettings;
   /** Property Website + Social Media Kit offers, prices and client permissions. */
   marketingKit: MarketingKitSettings;
   /**
@@ -352,6 +357,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   portfolio: structuredClone(DEFAULT_PORTFOLIO_SETTINGS),
   tax: { ...DEFAULT_TAX_INFORMATION },
   travel: defaultTravelSettings(),
+  booking: mergeBookingSettings(null),
   marketingKit: structuredClone(DEFAULT_MARKETING_KIT_SETTINGS),
   setupAcceptedDefaults: {
     logo: false,
@@ -361,6 +367,40 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     travel: false,
   },
 };
+
+/**
+ * Instant Booking replaced ZIP-centroid travel fees. A business that had travel fees on and
+ * has never saved the new travel model keeps charging the same way (now priced from driving
+ * miles): tiers stay tiers, "per mile outside a free radius" becomes per-mile, round trip.
+ */
+function mergeBookingWithLegacyTravel(storedBooking: unknown, storedTravel: unknown): BookingSettings {
+  const booking = mergeBookingSettings(storedBooking);
+  const hasNewTravel =
+    Boolean(storedBooking) &&
+    typeof storedBooking === "object" &&
+    Boolean((storedBooking as { travel?: unknown }).travel);
+  if (hasNewTravel || storedTravel == null) return booking;
+  const legacy = mergeTravelSettings(storedTravel);
+  if (!legacy.enabled) return booking;
+  if (legacy.pricingModel === "radius_per_mile") {
+    booking.travel = {
+      ...booking.travel,
+      model: "per_mile",
+      freeMiles: legacy.freeRadiusMiles,
+      perMileCents: legacy.perMileCents,
+      roundTrip: true,
+      maxFeeCents: legacy.maxFeeCents,
+    };
+  } else {
+    booking.travel = {
+      ...booking.travel,
+      model: "tiers",
+      tiers: legacy.tiers.map((t) => ({ fromMiles: t.fromMiles, toMiles: t.toMiles, feeCents: t.feeCents })),
+      maxFeeCents: legacy.maxFeeCents,
+    };
+  }
+  return booking;
+}
 
 function deepMerge<T extends Record<string, unknown>>(base: T, patch: Partial<T>): T {
   const result = { ...base };
@@ -450,7 +490,10 @@ export function mergeAppSettings(stored: Partial<AppSettings> | null | undefined
     ),
     portfolio: mergePortfolioSettings(stored.portfolio),
     tax: sanitizeTaxInformation(stored.tax, false),
-    travel: mergeTravelSettings(stored.travel),
+    // ZIP-centroid travel is retired: its settings are carried into booking.travel (Google
+    // Routes) below and never applied again, so "enabled" is always false from here on.
+    travel: { ...mergeTravelSettings(stored.travel), enabled: false },
+    booking: mergeBookingWithLegacyTravel(stored.booking, stored.travel),
     marketingKit: mergeMarketingKitSettings(stored.marketingKit),
     setupAcceptedDefaults: {
       ...DEFAULT_APP_SETTINGS.setupAcceptedDefaults,
@@ -546,6 +589,11 @@ export async function saveAppSettings(
     patch = { ...patch, travel: parsed.settings };
   }
 
+  if (patch.booking) {
+    const bookingError = bookingSettingsError(patch.booking);
+    if (bookingError) throw new TravelSettingsError(bookingError);
+  }
+
   const current = await loadAppSettingsFromDb(businessId);
   const merged = mergeAppSettings(
     deepMerge(current as unknown as Record<string, unknown>, patch as unknown as Record<string, unknown>) as unknown as AppSettings
@@ -560,7 +608,8 @@ export async function saveAppSettings(
     merged.email.resendDomainId = current.email.resendDomainId;
   }
 
-  assertTravelSettings(merged.travel, merged.business.postalCode);
+  // Legacy ZIP travel settings are no longer edited; only validate when this save touches them.
+  if (patch.travel) assertTravelSettings(merged.travel, merged.business.postalCode);
 
   const colorDelta = changedBrandColors(current.business, merged.business);
   assertSafeBrandColors(colorDelta);

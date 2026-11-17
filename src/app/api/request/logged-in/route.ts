@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins, notifyClient } from "@/lib/notifications";
 import { createPreliminaryEstimate } from "@/lib/preliminary-estimates";
+import { recordRequestBookingFacts } from "@/lib/booking/request";
 import { defaultProjectTitle, resolveAddressFromBody } from "@/lib/address";
 import { linkProjectToProperty } from "@/lib/properties";
 import { touchClientActivity } from "@/lib/clients-data";
@@ -206,12 +207,22 @@ export async function POST(request: Request) {
     businessId,
   });
 
+  const bookingFacts = await recordRequestBookingFacts({
+    businessId,
+    projectId: project.id,
+    settings: createSettings,
+    propertyAddress: property_address,
+    serviceIds: selected.map((s) => s.id).filter((id): id is string => Boolean(id)),
+    hidePricing: selected.some((s) => s.template.hidePricing),
+  });
+
   if (instantPreliminary && serviceRequested) {
     await createPreliminaryEstimate(project.id, serviceRequested, {
       userId: profile.id,
       skipIfExists: true,
       businessId,
       templates: selected.map((s) => s.template),
+      travel: bookingFacts.travel ?? undefined,
     });
   }
 
@@ -239,5 +250,10 @@ export async function POST(request: Request) {
 
   await syncNewProjectLeadToGhl(project.id, ghlPayload, businessId);
 
-  return NextResponse.json({ success: true, projectId: project.id });
+  return NextResponse.json({
+    success: true,
+    projectId: project.id,
+    // Instant Booking on: the client lands on the "request received → book a time" step.
+    nextUrl: bookingFacts.bookingOffered ? `/dashboard/projects/${project.id}/shoot?welcome=1` : null,
+  });
 }

@@ -46,6 +46,25 @@ export async function PATCH(
   if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
   if (body.aliases !== undefined) patch.aliases = parseStringArray(body.aliases);
   if (typeof body.display_order === "number") patch.display_order = body.display_order;
+  // Instant Booking rules (v132).
+  if (body.duration_minutes !== undefined) {
+    const minutes = Math.round(Number(body.duration_minutes));
+    if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) {
+      return NextResponse.json({ error: "Duration must be between 5 minutes and 24 hours." }, { status: 400 });
+    }
+    patch.duration_minutes = minutes;
+  }
+  if (body.buffer_minutes !== undefined) {
+    const minutes = Math.round(Number(body.buffer_minutes));
+    if (!Number.isFinite(minutes) || minutes < 0 || minutes > 480) {
+      return NextResponse.json({ error: "Buffer must be between 0 and 480 minutes." }, { status: 400 });
+    }
+    patch.buffer_minutes = minutes;
+  }
+  if (typeof body.instant_booking_allowed === "boolean") patch.instant_booking_allowed = body.instant_booking_allowed;
+  if (typeof body.outside_radius_requires_quote === "boolean") {
+    patch.outside_radius_requires_quote = body.outside_radius_requires_quote;
+  }
 
   if (typeof patch.name === "string" && patch.line_items === undefined && patch.preliminary_estimate_cents !== undefined) {
     const cents = Number(patch.preliminary_estimate_cents ?? 0);
@@ -68,7 +87,15 @@ export async function PATCH(
 
   const db = await createTenantServiceClient(tenant.businessId);
   const { data, error } = await db.from("business_services").update(patch).eq("id", id).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    if (/duration_minutes|buffer_minutes|instant_booking_allowed|outside_radius_requires_quote/.test(error.message)) {
+      return NextResponse.json(
+        { error: "Apply database migration v132 (Instant Booking) to save service durations and booking rules." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
   invalidateBusinessServicesCache(tenant.businessId);
   return NextResponse.json({ service: data });
 }

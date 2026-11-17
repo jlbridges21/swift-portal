@@ -45,7 +45,11 @@ export function LoggedInRequestForm({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed to submit");
 
-      router.push(`/dashboard/projects/${body.projectId}?welcome=1`);
+      router.push(
+        typeof body.nextUrl === "string" && body.nextUrl.startsWith("/dashboard/")
+          ? body.nextUrl
+          : `/dashboard/projects/${body.projectId}?welcome=1`
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

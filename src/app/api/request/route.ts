@@ -37,6 +37,8 @@ import {
   type RequestScenario,
 } from "@/lib/portal-activation";
 import { ensureClientLoginPlaceholder } from "@/lib/portal-activation-server";
+import { recordRequestBookingFacts } from "@/lib/booking/request";
+import { sealBookingToken } from "@/lib/booking/token";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -363,12 +365,24 @@ export async function POST(request: Request) {
       businessId,
     });
 
+    // Instant Booking: driving distance (Google Routes), service area, duration and the
+    // project's scheduling status. Fails soft: the request is saved either way.
+    const bookingFacts = await recordRequestBookingFacts({
+      businessId,
+      projectId: project.id,
+      settings: appSettingsEarly,
+      propertyAddress: property_address,
+      serviceIds: selected.map((s) => s.id).filter((id): id is string => Boolean(id)),
+      hidePricing: selected.some((s) => s.template.hidePricing),
+    });
+
     if (instantPreliminary && serviceRequested) {
       await createPreliminaryEstimate(project.id, serviceRequested, {
         userId: actorUserId,
         skipIfExists: true,
         businessId,
         templates: selected.map((s) => s.template),
+        travel: bookingFacts.travel ?? undefined,
       });
     }
 
@@ -406,7 +420,8 @@ export async function POST(request: Request) {
         projectId: project.id,
         freshClient: scenario === "A",
       });
-      thankYouUrl = `${THANK_YOU_PATH}?t=${encodeURIComponent(token)}`;
+      const bookingToken = sealBookingToken({ businessId, clientId, projectId: project.id });
+      thankYouUrl = `${THANK_YOU_PATH}?t=${encodeURIComponent(token)}&b=${encodeURIComponent(bookingToken)}`;
     } catch (err) {
       // The request is saved either way; the form falls back to an inline confirmation.
       console.error("[request] thank-you token unavailable:", err instanceof Error ? err.message : err);

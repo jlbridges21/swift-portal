@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,14 +237,23 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
           <Calendar className="h-5 w-5 text-accent" /> Shoot Scheduling
         </CardTitle>
         {canProposeNew && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-11 w-full sm:w-auto"
-            onClick={() => setShowForm(!showForm)}
-          >
-            {isAdmin ? "Propose a Shoot Time" : "Suggest a Shoot Time"}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {!isAdmin ? (
+              <Link href={`/dashboard/projects/${projectId}/shoot`}>
+                <Button variant="accent" size="sm" className="min-h-11 w-full sm:w-auto">
+                  <Calendar className="h-4 w-4" /> Schedule My Shoot
+                </Button>
+              </Link>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => setShowForm(!showForm)}
+            >
+              {isAdmin ? "Propose a Shoot Time" : "Suggest a Shoot Time"}
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -268,7 +278,7 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
                   <p className="text-sm text-emerald-600 mt-2">{confirmed.message}</p>
                 )}
               </div>
-              {isAdmin && (
+              {isAdmin ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -277,6 +287,12 @@ export function ShootScheduling({ projectId, proposals, isAdmin, onUpdate }: Sho
                 >
                   <Pencil className="h-3.5 w-3.5" /> Reschedule
                 </Button>
+              ) : (
+                <Link href={`/dashboard/projects/${projectId}/shoot`} className="shrink-0">
+                  <Button variant="outline" size="sm" className="min-h-11">
+                    <Calendar className="h-3.5 w-3.5" /> Shoot details
+                  </Button>
+                </Link>
               )}
             </div>
           </div>

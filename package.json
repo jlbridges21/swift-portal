@@ -45,6 +45,7 @@
     "test:photo-selection-toolbar": "npx tsx scripts/verify-photo-selection-toolbar.ts",
     "test:pwa-safe-area": "npx tsx scripts/verify-pwa-safe-area.ts",
     "test:optimize-upload-image": "npx tsx scripts/verify-optimize-upload-image.ts",
+    "test:instant-booking": "npx tsx scripts/verify-instant-booking.ts",
     "seo:audit": "npx tsx scripts/seo-audit.ts",
     "setup:stripe-billing": "npx tsx scripts/setup-stripe-billing.ts",
     "tenant-lint": "npx tsx scripts/tenant-lint.ts && npx tsx scripts/verify-marketing-css.ts",

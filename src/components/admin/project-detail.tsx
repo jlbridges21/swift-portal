@@ -29,6 +29,7 @@ import type { Project, Client, MediaAsset, Tour, Project3dModel, Payment, ShootP
 import type { DepositMode } from "@/lib/workflow-settings";
 import { normalizeStatus } from "@/lib/constants";
 import { ShootScheduling } from "@/components/projects/shoot-scheduling";
+import { ProjectBookingCard } from "@/components/admin/booking/project-booking-card";
 import { ProjectStaffCard } from "@/components/admin/project-staff-card";
 import { ProjectClientsDetailsCard } from "@/components/admin/project-workspace/project-clients-details-card";
 import { ProjectActivityTimeline } from "@/components/projects/project-activity-timeline";
@@ -2671,6 +2672,7 @@ export function AdminProjectDetail({
               className="grid gap-4 2xl:grid-cols-2"
             >
               <div className="min-w-0 space-y-4">
+                <ProjectBookingCard projectId={initialProject.id} proposals={shootProposals} />
                 <Suspense fallback={null}>
                   <ShootScheduling
                     projectId={initialProject.id}
@@ -2913,6 +2915,7 @@ export function AdminProjectDetail({
         projectId={initialProject.id}
       />
 
+      <ProjectBookingCard projectId={initialProject.id} proposals={shootProposals} />
       <Suspense fallback={null}>
         <ShootScheduling
           projectId={initialProject.id}
