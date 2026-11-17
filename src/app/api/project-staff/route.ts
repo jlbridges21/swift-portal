@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { notifyTeamMember } from "@/lib/notifications";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { canAccessProject } from "@/lib/project-access";
@@ -66,6 +67,32 @@ export async function POST(request: Request) {
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+  if (result.created && userId !== auth.profile.id) {
+    const businessId = tenant.businessId;
+    after(async () => {
+      try {
+        const { createTenantServiceClient } = await import("@/lib/supabase/tenant-service");
+        const db = await createTenantServiceClient(businessId);
+        const { data: project } = await db
+          .from("projects")
+          .select("project_name, property_address")
+          .eq("id", projectId)
+          .maybeSingle();
+        const name = (project?.property_address as string | null)?.trim() || (project?.project_name as string | null) || "a project";
+        await notifyTeamMember({
+          businessId,
+          userId,
+          projectId,
+          type: "project_assigned",
+          title: "You were added to a project",
+          body: `${auth.profile.full_name?.trim() || "The studio"} added you to ${name}.`,
+          link: `/admin/projects/${projectId}`,
+        });
+      } catch (err) {
+        console.error("[project-staff] assignment notification failed", err instanceof Error ? err.message : err);
+      }
+    });
   }
   return NextResponse.json(result);
 }

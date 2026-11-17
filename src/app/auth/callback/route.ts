@@ -147,6 +147,8 @@ export async function GET(request: Request) {
         const honorNext =
           next.startsWith("/auth/") ||
           next.startsWith("/dashboard/settings") ||
+          // Staff email change confirmation lands back on their Settings.
+          next.startsWith("/admin/account") ||
           next.startsWith("/login");
         if (!honorNext) {
           const service = await createServiceClient();

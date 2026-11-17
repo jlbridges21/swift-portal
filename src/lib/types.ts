@@ -15,7 +15,9 @@ export type NotificationType =
   | "payment_confirmed"
   | "project_message"
   | "client_added_to_project"
-  | "video_review_activity";
+  | "video_review_activity"
+  | "project_assigned"
+  | "shoot_reminder";
 
 export type ProjectStatus =
   | "new_request"

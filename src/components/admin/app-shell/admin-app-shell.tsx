@@ -96,7 +96,7 @@ function routePageTitle(pathname: string, isStaff: boolean): ShellPageTitle {
   if (p === "/admin/academy") return { title: "Academy", description: "Learn ShootPortal in short videos, then earn your certificate." };
   if (p.startsWith("/admin/academy/")) return { title: "Academy", crumbs: [{ label: "Academy", href: "/admin/academy" }] };
   if (p.startsWith("/partner")) return { title: "Partner", description: "ShootPortal Partner Program" };
-  if (p.startsWith("/staff/settings")) return { title: "Preferences" };
+  if (p.startsWith("/admin/account") || p.startsWith("/staff/settings")) return { title: "Settings", description: "Your account" };
   return { title: isStaff ? "ShootPortal" : "Command Center" };
 }
 
@@ -166,8 +166,8 @@ export function AdminAppShell({
   }, [isStaff, staffAreas, caps.showPartner, caps.partnerNavHref, messagesUnread]);
 
   const homeHref = isStaff ? (staffAreas?.[0] ? STAFF_AREA_HOME[staffAreas[0]] : "/staff") : "/admin";
-  const settingsHref = isStaff ? "/staff/settings" : "/admin/settings";
-  const settingsLabel = isStaff ? "Preferences" : "Settings";
+  const settingsHref = isStaff ? "/admin/account" : "/admin/settings";
+  const settingsLabel = "Settings";
   const canSeeMessages = !staffAreas || staffAreas.includes("messages");
 
   // Unread client messages: refreshed on every navigation (cheap count query).

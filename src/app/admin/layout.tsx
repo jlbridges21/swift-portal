@@ -11,6 +11,7 @@ import { getCapabilities, partnerNavHref, partnerNavLabel, showPartnerNavItem } 
 import { getTenantContext } from "@/lib/tenant";
 import { metadataFromBusiness } from "@/lib/site-metadata";
 import { parseSurfaceMode } from "@/lib/brand-color";
+import { parseThemePreference } from "@/lib/staff-account-shared";
 import { showFinishSetupBanner } from "@/lib/onboarding";
 import { staffCan, staffVisibleNavAreas } from "@/lib/staff-access";
 import { w9CountryDecision } from "@/lib/w9-country";
@@ -37,6 +38,13 @@ export async function generateViewport(): Promise<Viewport> {
   const settings = await getAppSettings(tenant.businessId);
   // Status bar = app header surface (one continuous solid top), not the gray page background.
   return appChromeThemeColor(settings.business);
+}
+
+/** Team members can pick light or dark for themselves (Settings → Preferences); otherwise the studio look. */
+function viewerSurfaceMode(profile: { role: string }, businessMode: unknown) {
+  const pref = parseThemePreference((profile as Record<string, unknown>).theme_preference);
+  if (profile.role === "staff" && pref !== "studio") return pref;
+  return parseSurfaceMode(businessMode);
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -145,7 +153,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
+    <BrandProvider brand={brand} surfaceMode={viewerSurfaceMode(profile, settings.business.surfaceMode)}>
       <AdminCapabilitiesProvider
         showPartner={showPartner}
         partnerActive={caps.partner.active}

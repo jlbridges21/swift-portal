@@ -3,12 +3,15 @@ import Link from "next/link";
 import { getProfile } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
-import { StaffNotificationPrefs } from "@/components/admin/staff-notification-prefs";
+import { Suspense } from "react";
+import { StaffAccountSettings } from "@/components/staff-account/staff-account-settings";
+import { getAppSettings } from "@/lib/app-settings";
+import { loadStaffAccount } from "@/lib/staff-account";
 import { staffHasAnyArea, staffHomePath } from "@/lib/staff-access";
 
 /**
- * Staff account prefs — notification channels only.
- * Studio settings / billing remain owner-admin.
+ * Old address of staff Settings. Staff with any area use /admin/account inside the app;
+ * someone with no areas yet (no app shell to show) gets the same Settings on this bare page.
  */
 export default async function StaffSettingsPage() {
   const profile = await getProfile();
@@ -22,7 +25,14 @@ export default async function StaffSettingsPage() {
   const tenant = await getTenantContext();
   if (!tenant) redirect("/login?error=unavailable");
 
-  const home = staffHasAnyArea(profile) ? staffHomePath(profile) : "/staff";
+  if (staffHasAnyArea(profile)) redirect("/admin/account");
+  const home = staffHomePath(profile);
+  const data = await loadStaffAccount({
+    profile,
+    businessId: tenant.businessId,
+    businessName: tenant.business.name,
+    settings: await getAppSettings(tenant.businessId),
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -46,14 +56,14 @@ export default async function StaffSettingsPage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-10">
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Your preferences</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Signed in as {profile.email}. These controls affect only your account.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="mt-1 text-sm text-slate-600">Your own account. Changes here affect only you.</p>
         </div>
-        <StaffNotificationPrefs profile={profile} />
+        <Suspense>
+          <StaffAccountSettings data={data} pendingEmail={null} />
+        </Suspense>
       </main>
     </div>
   );

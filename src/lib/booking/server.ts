@@ -8,6 +8,7 @@ import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supab
 import { getAppSettings, type AppSettings } from "@/lib/app-settings";
 import { getGoogleCalendarAccess, getMemberGoogleAccess, listMemberConnections, resolveBusinessTimeZone } from "@/lib/google-calendar";
 import { listGoogleEvents } from "@/lib/google-calendar-pull";
+import { timeOffToBusy } from "@/lib/staff-account-shared";
 import { loadProjectServiceLinks } from "@/lib/project-services";
 import {
   combinedDuration,
@@ -517,6 +518,8 @@ async function prepare(
       .map((h) => ({ start: Date.parse(h.block_start_at as string), end: Date.parse(h.block_end_at as string), label: "Held", kind: "hold" as const }));
     const own = memberBusy.get(member.userId);
     const googleBusy = [...member.blockCalendarIds.flatMap((id) => busy.byCalendar.get(id) ?? []), ...(own?.intervals ?? [])];
+    // Vacations / sick days from their own Settings (v134).
+    const timeOffBusy = timeOffToBusy(member.profile.timeOff, ctx.timeZone, fromMs - DAY, toMs + DAY);
     engineStaff.push({
       userId: member.userId,
       name: member.name,
@@ -534,7 +537,7 @@ async function prepare(
           address: a.address,
         })
       ),
-      busy: [...googleBusy, ...holdBusy],
+      busy: [...googleBusy, ...timeOffBusy, ...holdBusy],
       weights: member.weights,
       fitScore: fit.score,
       // Fail closed: if someone's calendar can't be read, they aren't offered.

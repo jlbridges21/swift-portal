@@ -117,10 +117,10 @@ async function deliverReminder(
   const when = reminderWhen(startMs, nowMs, timeZone);
   const place = row.projects?.property_address?.trim() || row.projects?.project_name?.trim() || "your property";
 
-  let photographer: { id: string; name: string } | null = null;
+  let photographer: { id: string; name: string; role: string } | null = null;
   if (row.assigned_user_id) {
-    const { data } = await raw.from("profiles").select("id, full_name").eq("id", row.assigned_user_id).maybeSingle();
-    if (data) photographer = { id: data.id as string, name: (data.full_name as string | null)?.trim() || "" };
+    const { data } = await raw.from("profiles").select("id, full_name, role").eq("id", row.assigned_user_id).maybeSingle();
+    if (data) photographer = { id: data.id as string, name: (data.full_name as string | null)?.trim() || "", role: data.role as string };
   }
   const { count: teamSize } = await raw
     .from("profiles")
@@ -145,7 +145,9 @@ async function deliverReminder(
     });
   }
 
-  if (reminders.notifyPhotographer) {
+  // Staff photographers get their own day-before / morning-of reminders (their Settings →
+  // Notifications choices, /api/cron/staff-shoot-reminders), so this one is for owners and admins.
+  if (reminders.notifyPhotographer && photographer?.role !== "staff") {
     const { data: project } = await raw
       .from("projects")
       .select("clients(name, full_name)")

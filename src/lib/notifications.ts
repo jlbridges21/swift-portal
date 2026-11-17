@@ -13,6 +13,11 @@ import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { isLiveBusiness } from "@/lib/business-live";
 import { staffShouldReceiveNotification } from "@/lib/staff-access";
 import { hasStaffPermission } from "@/lib/staff-permissions";
+import {
+  isStaffEventOn,
+  staffEventForNotificationType,
+  type StaffNotificationEventKey,
+} from "@/lib/staff-account-shared";
 
 export type { NotificationType };
 
@@ -162,14 +167,26 @@ async function getAdminRecipients(
   }));
 
   // Active staff who should receive this notification type.
-  const { data: staffRows } = await db.raw
-    .from("profiles")
-    .select(
-      "id, email, full_name, staff_permissions, disabled_at, email_notifications_enabled, in_app_notifications_enabled"
-    )
-    .eq("role", "staff")
-    .eq("business_id", businessId)
-    .is("disabled_at", null);
+  const staffColumns =
+    "id, email, full_name, staff_permissions, disabled_at, email_notifications_enabled, in_app_notifications_enabled";
+  const loadStaff = (columns: string) =>
+    db.raw.from("profiles").select(columns).eq("role", "staff").eq("business_id", businessId).is("disabled_at", null);
+  // notification_event_prefs is v134; before it exists, everyone keeps every event.
+  let staffQuery = await loadStaff(`${staffColumns}, notification_event_prefs`);
+  if (staffQuery.error) staffQuery = await loadStaff(staffColumns);
+  const staffRows = (staffQuery.data ?? null) as unknown as
+    | {
+        id: string;
+        email: string;
+        full_name: string | null;
+        staff_permissions: unknown;
+        disabled_at: string | null;
+        email_notifications_enabled: boolean | null;
+        in_app_notifications_enabled: boolean | null;
+        notification_event_prefs?: unknown;
+      }[]
+    | null;
+  const staffEvent = staffEventForNotificationType(options.type);
 
   if (!staffRows?.length) return recipients;
 
@@ -197,6 +214,9 @@ async function getAdminRecipients(
     ) {
       continue;
     }
+
+    // The team member's own per-event choice (Settings → Notifications).
+    if (staffEvent && !isStaffEventOn(row.notification_event_prefs, staffEvent)) continue;
 
     if (assignedStaffIds) {
       const viewAll = hasStaffPermission(row.staff_permissions, "projects.view_all");
@@ -636,4 +656,88 @@ export async function notifyClient(
     notifyAdmins: false,
     notifyClients: false,
   });
+}
+
+/**
+ * One team member, directly (added to a project, shoot reminders). Honors their email / in-app
+ * switches and their per-event choice. Business-wide notification routing does not apply: these
+ * are personal alerts the owner never receives.
+ */
+export async function notifyTeamMember(options: {
+  businessId: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body?: string;
+  link?: string;
+  projectId?: string;
+  /** Per-event choice to check when the type alone doesn't say (shoot reminders). */
+  event?: StaffNotificationEventKey;
+}): Promise<{ inApp: boolean; email: boolean }> {
+  const result = { inApp: false, email: false };
+  if (!(await isLiveBusiness(options.businessId))) return result;
+  const db = await createTenantServiceClient(options.businessId);
+  const columns = "id, email, role, disabled_at, email_notifications_enabled, in_app_notifications_enabled";
+  const load = (cols: string) =>
+    db.raw.from("profiles").select(cols).eq("id", options.userId).eq("business_id", options.businessId).maybeSingle();
+  let query = await load(`${columns}, notification_event_prefs`);
+  if (query.error) query = await load(columns);
+  const person = query.data as unknown as {
+    id: string;
+    email: string | null;
+    role: string;
+    disabled_at: string | null;
+    email_notifications_enabled: boolean | null;
+    in_app_notifications_enabled: boolean | null;
+    notification_event_prefs?: unknown;
+  } | null;
+  if (!person || person.disabled_at || (person.role !== "staff" && person.role !== "admin")) return result;
+
+  const event = options.event ?? staffEventForNotificationType(options.type);
+  if (event && !isStaffEventOn(person.notification_event_prefs, event)) return result;
+
+  let notificationId: string | null = null;
+  if (person.in_app_notifications_enabled !== false) {
+    const { data } = await db
+      .from("notifications")
+      .insert({
+        user_id: person.id,
+        type: options.type,
+        title: options.title,
+        body: options.body ?? null,
+        link: options.link ?? null,
+        project_id: options.projectId ?? null,
+      })
+      .select("id")
+      .single();
+    notificationId = data?.id ?? null;
+    result.inApp = Boolean(data);
+  }
+
+  if (person.email_notifications_enabled !== false && person.email) {
+    try {
+      const appUrl = await getBusinessPortalOriginById(options.businessId);
+      let projectName: string | undefined;
+      if (options.projectId) {
+        const { data } = await db.from("projects").select("project_name").eq("id", options.projectId).maybeSingle();
+        projectName = (data?.project_name as string | undefined) ?? undefined;
+      }
+      const sent = await sendBrandedEmail({
+        businessId: options.businessId,
+        to: person.email,
+        subject: options.title,
+        title: options.title,
+        body: options.body || "",
+        projectName,
+        ctaLabel: options.link ? "View in Portal" : undefined,
+        ctaUrl: options.link ? (options.link.startsWith("http") ? options.link : `${appUrl}${options.link}`) : undefined,
+        emailType: options.type,
+        analytics: { projectId: options.projectId, notificationId, emailType: options.type },
+      });
+      result.email = sent.sent;
+    } catch (error) {
+      console.error("[email] team member notification error:", options.type, error);
+    }
+  }
+  return result;
 }

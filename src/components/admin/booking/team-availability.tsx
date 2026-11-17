@@ -32,6 +32,7 @@ import {
   NativeSelect,
   Notice,
   PersonAvatar,
+  ToggleRow,
   WeeklyHoursEditor,
 } from "@/components/admin/booking/booking-ui";
 import {
@@ -216,6 +217,9 @@ function MemberEditor({
   const services = overview.services.filter((s) => s.isActive);
   const calendars = overview.google.calendars;
   const ownHours = p.workingHours !== null;
+  // Rough "today" is fine here: it only hides entries that already ended.
+  const [cutoffDay] = useState(() => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10));
+  const upcomingOff = p.timeOff.filter((t) => t.endDay >= cutoffDay);
   const weights: AssignmentWeights = p.assignmentWeights ?? settings.booking.assignmentWeights;
 
   useEffect(() => setMessage(null), [tab]);
@@ -488,6 +492,10 @@ function MemberEditor({
                 options={[
                   { value: "", label: `Business default (${settings.booking.maxShootsPerDay})` },
                   ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} shoot${i ? "s" : ""} per day` })),
+                  // A value the team member typed in their own Settings.
+                  ...(p.maxShootsPerDay != null && p.maxShootsPerDay > 12
+                    ? [{ value: String(p.maxShootsPerDay), label: `${p.maxShootsPerDay} shoots per day` }]
+                    : []),
                 ]}
               />
             </BookingCard>
@@ -501,7 +509,9 @@ function MemberEditor({
                     value: "",
                     label: settings.booking.serviceRadiusEnabled ? `Business default (${settings.booking.serviceRadiusMiles} miles)` : "No limit",
                   },
-                  ...[10, 15, 20, 25, 30, 40, 50, 75, 100].map((m) => ({ value: String(m), label: `${m} miles` })),
+                  ...[...new Set([10, 15, 20, 25, 30, 40, 50, 75, 100, ...(p.serviceRadiusMiles != null ? [p.serviceRadiusMiles] : [])])]
+                    .sort((a, b) => a - b)
+                    .map((m) => ({ value: String(m), label: `${m} miles` })),
                 ]}
               />
               {!settings.booking.serviceRadiusEnabled ? (
@@ -509,6 +519,36 @@ function MemberEditor({
               ) : null}
             </BookingCard>
           </div>
+
+          {member.role === "staff" ? (
+            <BookingCard icon={UserRound} title="Their own Settings" description="What this person can change from Settings in their own account.">
+              <div className="space-y-4">
+                <ToggleRow
+                  id={`limits-${member.userId}`}
+                  checked={p.staffCanEditLimits}
+                  onChange={(v) => patch({ staffCanEditLimits: v })}
+                  label="Let them change their max shoots per day and drive distance"
+                  description="Working hours and time off are always theirs to manage."
+                />
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-foreground">Upcoming time off</p>
+                  {upcomingOff.length ? (
+                    <ul className="space-y-1 text-sm text-heading">
+                      {upcomingOff.map((t) => (
+                        <li key={t.id}>
+                          {t.startDay === t.endDay ? t.startDay : `${t.startDay} → ${t.endDay}`}
+                          {t.startTime && t.endTime ? ` · ${t.startTime}–${t.endTime}` : " · all day"}
+                          {t.note ? <span className="text-muted"> · {t.note}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">None. They add time off from their own Settings.</p>
+                  )}
+                </div>
+              </div>
+            </BookingCard>
+          ) : null}
 
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="flex items-start gap-3">

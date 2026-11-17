@@ -160,10 +160,10 @@ export function Header({
     ...adminLinks,
     ...(showPartnerLink ? [{ href: partnerHref, label: partnerLabel }] : []),
     { href: "/admin/academy", label: "Academy" },
-    // Staff must not see studio Settings; they manage personal prefs at /staff/settings.
+    // Staff never see studio Settings; their own account Settings live at /admin/account.
     ...(!isStaff
       ? [{ href: "/admin/settings", label: "Settings" }]
-      : [{ href: "/staff/settings", label: "Preferences" }]),
+      : [{ href: "/admin/account", label: "Settings" }]),
   ];
 
   useEffect(() => {
@@ -329,9 +329,9 @@ export function Header({
                 </Link>
               ) : (
                 <Link
-                  href="/staff/settings"
+                  href="/admin/account"
                   className="hidden md:inline-flex rounded-md p-2 text-muted transition-colors hover:bg-slate-100 surface-dark:hover:bg-subtle hover:text-foreground"
-                  title="Notification preferences"
+                  title="Settings"
                 >
                   <Settings className="h-5 w-5" />
                 </Link>

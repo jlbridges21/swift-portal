@@ -5,7 +5,7 @@
  */
 
 import { logProjectActivity } from "@/lib/activity";
-import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
+import { notifyAdmins, notifyProjectClients, notifyTeamMember } from "@/lib/notifications";
 import { setProjectStatus } from "@/lib/status-automation";
 import { syncShootToGoogleSafe } from "@/lib/google-calendar";
 import { formatZoned } from "@/lib/booking/time";
@@ -44,12 +44,36 @@ async function setSchedulingStatus(ctx: BookingContext, projectId: string, statu
   }
 }
 
-async function ensureProjectStaff(ctx: BookingContext, projectId: string, userId: string, actorId: string | null) {
+/** Adds a staff assignee to the project. True when they were newly added. */
+async function ensureProjectStaff(ctx: BookingContext, projectId: string, userId: string, actorId: string | null): Promise<boolean> {
   const member = ctx.team.find((m) => m.userId === userId);
-  if (!member || member.role !== "staff") return;
-  await ctx.db
+  if (!member || member.role !== "staff") return false;
+  const { data } = await ctx.db
     .from("project_staff")
-    .upsert({ project_id: projectId, user_id: userId, added_by: actorId }, { onConflict: "project_id,user_id", ignoreDuplicates: true });
+    .upsert({ project_id: projectId, user_id: userId, added_by: actorId }, { onConflict: "project_id,user_id", ignoreDuplicates: true })
+    .select("user_id");
+  return Boolean(data?.length);
+}
+
+/** Personal alert to the person a shoot was just given to (their "Added to a project" choice). */
+async function notifyAssignee(
+  ctx: BookingContext,
+  facts: BookingProjectFacts,
+  userId: string,
+  actorId: string | null,
+  startMs: number
+) {
+  const member = ctx.team.find((m) => m.userId === userId);
+  if (!member || member.role !== "staff" || userId === actorId) return;
+  await notifyTeamMember({
+    businessId: ctx.businessId,
+    userId,
+    projectId: facts.projectId,
+    type: "project_assigned",
+    title: "A shoot was assigned to you",
+    body: `${facts.propertyAddress ?? facts.projectName} · ${whenLabel(ctx, startMs)} · ${facts.clientName}`,
+    link: `/admin/projects/${facts.projectId}`,
+  });
 }
 
 function memberName(ctx: BookingContext, userId: string): string {
@@ -222,8 +246,10 @@ async function afterBooked(
 ) {
   try {
     await setSchedulingStatus(ctx, facts.projectId, "scheduled", args.startMs);
-    await ensureProjectStaff(ctx, facts.projectId, args.userId, args.actor.userId);
+    const newlyAdded = await ensureProjectStaff(ctx, facts.projectId, args.userId, args.actor.userId);
     await syncShootToGoogleSafe(ctx.businessId, args.proposalId, "upsert");
+    // Someone just put on the project hears it once, as an assignment, not also as a schedule change.
+    if (newlyAdded) await notifyAssignee(ctx, facts, args.userId, args.actor.userId, args.startMs);
 
     const when = whenLabel(ctx, args.startMs);
     const who = memberName(ctx, args.userId);
@@ -262,6 +288,7 @@ async function afterBooked(
       body: `${facts.clientName} · ${facts.propertyAddress ?? facts.projectName} · ${when}${ctx.bookable.length > 1 ? ` · ${who}` : ""}`,
       link: `/admin/calendar?shoot=${args.proposalId}`,
       idempotencyKey: `booking:${args.proposalId}:admin`,
+      excludeUserIds: newlyAdded ? [args.userId] : undefined,
     });
     await notifyProjectClients({
       businessId: ctx.businessId,
@@ -376,6 +403,7 @@ export async function reassignAppointment(
   try {
     await ensureProjectStaff(ctx, facts.projectId, input.userId, input.actor.userId);
     await syncShootToGoogleSafe(ctx.businessId, appt.id, "upsert");
+    await notifyAssignee(ctx, facts, input.userId, input.actor.userId, appt.start);
     await logProjectActivity(
       "shoot_reassigned",
       `Shoot reassigned from ${appt.assignedUserId ? memberName(ctx, appt.assignedUserId) : "unassigned"} to ${memberName(ctx, input.userId)}${override ? " (admin override)" : ""}`,
