@@ -157,7 +157,9 @@ export function ProjectMessages({
                       <div className="mb-1 flex items-center gap-2 text-[11px] opacity-80">
                         <span className="font-medium">
                           {mine
-                            ? "You"
+                            ? isAdmin
+                              ? message.sender_name?.trim() || "You"
+                              : "You"
                             : message.sender_role === "admin"
                               ? brand.name
                               : message.sender_name || "Client"}

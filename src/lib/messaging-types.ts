@@ -33,6 +33,8 @@ export interface CrmTimelineItem {
   icon?: string | null;
   meta?: string | null;
   sender_role?: "admin" | "client";
+  /** Display name of the person who sent the message (owner or staff member's profile name). */
+  sender_name?: string | null;
   is_unread?: boolean;
   project_id?: string | null;
   project_name?: string | null;
