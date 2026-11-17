@@ -17,11 +17,23 @@ Routes), for solo operators and teams.
    - tables `team_scheduling_profiles`, `booking_holds`, `route_cache` (service-role only)
    - exclusion constraint `shoot_proposals_no_double_booking` (needs `btree_gist`) and
      `confirm_instant_booking()` (advisory-locked confirm that rechecks holds + overlaps)
-2. **Environment — `GOOGLE_MAPS_API_KEY`** (server only; never sent to the browser).
+2. **Database — apply `supabase/migration-v133-booking-followups.sql`** after v132. Additive.
+   Adds the activity types booking logs (cancel, reassign, override, skipped, times offered),
+   `shoot_proposals.reminder_sent_at` (+ index), `shoot_proposals.google_owner_user_id`, the
+   `offer` booking source, and `team_google_calendar_connections` (service-role only, tokens
+   encrypted like the business connection). Until it runs: reminders don't send, offers save as
+   legacy proposals, and personal calendar connections show a "needs migration" notice.
+3. **Environment — `GOOGLE_MAPS_API_KEY`** (server only; never sent to the browser).
    In Google Cloud enable **Routes API** and **Maps Static API** for the key; restrict it to those
    two APIs. Without it: drive time between shoots is assumed to be 30 minutes, travel fees are left
    for the business to quote (the business is notified), and the route modal shows a sketch.
-3. **Google Calendar** — no new scopes. The existing `calendar.events` +
+4. **Cron — `/api/cron/shoot-reminders`** every 15 minutes (in `vercel.json`; needs the existing
+   `CRON_SECRET`). `?dryRun=1` reports what would send.
+5. **Address autocomplete** — enable **Places API (New)** on the same key and add it to the key's
+   API restrictions. The request forms (street address) and Team → base address then suggest real
+   addresses as people type (`/api/places`, same-origin only, rate limited, results biased to the
+   visitor's area). Until it's enabled they work as plain text fields.
+6. **Google Calendar** — no new scopes. The existing `calendar.events` +
    `calendar.calendarlist.readonly` grant covers busy-time reads, event writes, location and
    attendees. Busy times come from `events.list` (ShootPortal's own events are excluded; all-day
    events don't block).
@@ -62,19 +74,62 @@ by an owner/admin, with a reason and explicit confirmation, and are logged.
 automatically (tiers → tiers, per-mile-outside-radius → per-mile round trip). Historical estimates
 keep their saved travel lines. `travel-fee.ts` remains only for reading old line items.
 
+## Shoot reminders
+
+Settings → Instant Booking → Shoot reminders: on by default, 24 hours before (2/12/24/48), to the
+client and the assigned photographer (the owner on solo businesses). Channels follow Settings →
+Notifications → *Shoot reminder*. One reminder per appointment row (`reminder_sent_at`, claimed
+with a conditional update so overlapping runs can't double-send); a reschedule makes a new row, so
+the new time gets its own reminder. Shoots booked after the reminder time are skipped. Applies to
+every confirmed shoot, including ones confirmed through the legacy proposal flow.
+
+## Offered times (replaces "propose a time")
+
+The project page has one booking card: **Schedule shoot**, **Offer times** (up to 3 engine-checked
+times; the client picks one in their portal or from the email), and **Copy booking link** (the
+client's personal booking page; needs a client on the project and Instant Booking on). The old
+proposal card only appears while something is pending (offered times, a time the client
+suggested). Accepting any proposal, by client or business, now books through the engine and
+`confirm_instant_booking()`, so it can't double-book; a taken time returns a clear message and the
+business is notified. Offers don't hold the time.
+
+## Personal Google Calendars
+
+Each team member can connect their own Google account (Calendar → **My Google Calendar**, or their
+card in Team & Availability). Their chosen calendars block their availability (read with their own
+token; a broken connection fails closed, so they aren't offered). With "Each photographer's own
+calendar" selected, their confirmed shoots are written to their chosen calendar through their own
+account; reassigning moves the event between accounts (`google_owner_user_id` records which
+account holds it). Disconnecting moves their upcoming shoots back to the business calendar. The
+business connection and calendars shared with it keep working as before.
+
+## Calendar
+
+Week view is the default. Shoots are drawn for their booked length (`end_at`; legacy proposals
+stay one hour) on the Shoot Calendar and Projects → Calendar. With "Show drive time" on, hatched
+strips show the drive in (from home for the day's first shoot, else from the previous shoot) and
+the drive home after the last one (`computeCalendarTravelLegs`, cached Routes). On team calendars
+each photographer has a color (owner sets it from the swatch next to their name; stored
+business-wide in `booking.teamColors`; automatic colors until chosen). Times use the business time
+zone (Settings → Contact Information → Time zone, set automatically when the business address is
+picked from suggestions); the calendar notes when it differs from the device's zone.
+
 ## Tests
 
-`npm run test:instant-booking` — engine rules (hours, notice, buffers, drive time, start/end-of-day,
+`npm run test:instant-booking` — engine rules (incl. hold vs. Google conflicts), reminder timing
+and wording, (hours, notice, buffers, drive time, start/end-of-day,
 daily limits, Google conflicts, unknown drive times), team ranking/merge, time zones incl. DST,
 pricing, service area, templates, booking token. No database or network.
 
+`scripts/live-check-instant-booking.ts` — **writes live data**; runs Routes, holds, the
+confirm race, the exclusion constraint and Google create/move/reassign/cancel against the owner's
+own business, then deletes everything. Header explains how to run it with notifications muted.
+
 ## Known limitations / follow-ups
 
-- Team members' calendars are read through the business's single Google connection (share each
-  photographer's calendar with that account). Per-person Google OAuth is a follow-up.
-- Appointment reminders (24h before) are not added yet; confirmation, reschedule and cancellation
-  notifications are.
 - Multiple appointments per project are supported in the data model (`appointment_key`) and the
   confirm function; the UI manages the primary appointment only.
-- The legacy propose/confirm card stays on the project page for businesses that prefer proposing
-  times to clients.
+- Offered times don't hold the slot; a client who picks a time someone else just took is asked to
+  pick another (and the business is notified).
+- Personal Google connections need the Google OAuth app to be published (or each person listed as
+  a test user while it's in testing mode).

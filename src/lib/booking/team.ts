@@ -14,6 +14,7 @@ import {
   type BookingSettings,
   type WeeklyHours,
 } from "@/lib/booking/settings";
+import { parseTimeOff, type TimeOffEntry } from "@/lib/staff-account-shared";
 
 export type TeamProfileFields = {
   displayTitle: string;
@@ -32,6 +33,10 @@ export type TeamProfileFields = {
   destinationCalendarId: string;
   /** Null = business defaults. */
   assignmentWeights: AssignmentWeights | null;
+  /** Owner switch (v134): the person may change their own max shoots per day and drive distance. */
+  staffCanEditLimits: boolean;
+  /** Vacations, sick days (v134). Read-only for the owner save; staff manage it in Settings. */
+  timeOff: TimeOffEntry[];
 };
 
 export type TeamMember = {
@@ -79,12 +84,20 @@ function emptyProfile(role: TeamMember["role"]): TeamProfileFields {
     blockCalendarIds: [],
     destinationCalendarId: "",
     assignmentWeights: null,
+    staffCanEditLimits: true,
+    timeOff: [],
   };
 }
 
 function isMissingTable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   return error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache/i.test(error.message ?? "");
+}
+
+/** v134 columns (time_off, staff_can_edit_limits) not applied yet. */
+export function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703" || error.code === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(error.message ?? "");
 }
 
 function rowToProfile(row: Record<string, unknown>, role: TeamMember["role"]): TeamProfileFields {
@@ -106,6 +119,8 @@ function rowToProfile(row: Record<string, unknown>, role: TeamMember["role"]): T
       weights && typeof weights === "object" && Object.keys(weights as object).length
         ? mergeAssignmentWeights(weights, { distance: 80, workload: 50, fit: 80 })
         : null,
+    staffCanEditLimits: typeof row.staff_can_edit_limits === "boolean" ? row.staff_can_edit_limits : true,
+    timeOff: parseTimeOff(row.time_off),
   };
 }
 
@@ -192,24 +207,28 @@ export async function saveTeamProfile(
   fields: TeamProfileFields
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const db = await createTenantServiceClient(businessId);
-  const { error } = await db.from("team_scheduling_profiles").upsert(
-    {
-      user_id: userId,
-      display_title: fields.displayTitle.trim().slice(0, 80) || null,
-      short_bio: fields.shortBio.trim().slice(0, 400) || null,
-      phone: fields.phone.trim().slice(0, 40) || null,
-      base_address: fields.baseAddress.trim().slice(0, 300) || null,
-      working_hours: fields.workingHours,
-      max_shoots_per_day: fields.maxShootsPerDay,
-      service_radius_miles: fields.serviceRadiusMiles,
-      bookable: fields.bookable,
-      qualified_service_ids: fields.qualifiedServiceIds,
-      block_calendar_ids: fields.blockCalendarIds,
-      destination_calendar_id: fields.destinationCalendarId || null,
-      assignment_weights: fields.assignmentWeights ?? {},
-    },
-    { onConflict: "business_id,user_id" }
-  );
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    display_title: fields.displayTitle.trim().slice(0, 80) || null,
+    short_bio: fields.shortBio.trim().slice(0, 400) || null,
+    phone: fields.phone.trim().slice(0, 40) || null,
+    base_address: fields.baseAddress.trim().slice(0, 300) || null,
+    working_hours: fields.workingHours,
+    max_shoots_per_day: fields.maxShootsPerDay,
+    service_radius_miles: fields.serviceRadiusMiles,
+    bookable: fields.bookable,
+    qualified_service_ids: fields.qualifiedServiceIds,
+    block_calendar_ids: fields.blockCalendarIds,
+    destination_calendar_id: fields.destinationCalendarId || null,
+    assignment_weights: fields.assignmentWeights ?? {},
+    staff_can_edit_limits: fields.staffCanEditLimits,
+  };
+  let { error } = await db.from("team_scheduling_profiles").upsert(row, { onConflict: "business_id,user_id" });
+  if (error && isMissingColumn(error)) {
+    // Before v134: save everything except the owner lock.
+    delete row.staff_can_edit_limits;
+    ({ error } = await db.from("team_scheduling_profiles").upsert(row, { onConflict: "business_id,user_id" }));
+  }
   if (error) {
     if (isMissingTable(error)) {
       return { ok: false, status: 409, error: "Apply database migration v132 (Instant Booking) to save team scheduling profiles." };
@@ -251,6 +270,9 @@ export function parseTeamProfile(raw: unknown): { ok: true; fields: TeamProfileF
         r.assignmentWeights && typeof r.assignmentWeights === "object"
           ? mergeAssignmentWeights(r.assignmentWeights, { distance: 80, workload: 50, fit: 80 })
           : null,
+      staffCanEditLimits: r.staffCanEditLimits !== false,
+      // Never written by the owner save; kept so the type stays whole.
+      timeOff: [],
     },
   };
 }

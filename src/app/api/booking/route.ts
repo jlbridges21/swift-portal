@@ -24,13 +24,16 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins } from "@/lib/notifications";
 import { isTeamBusiness } from "@/lib/booking/team";
 import { routesConfigured } from "@/lib/booking/routes";
+import { offerTimes } from "@/lib/booking/offers";
+import { bookingPagePath, sealBookingToken } from "@/lib/booking/token";
+import { getBusinessPortalOriginById } from "@/lib/portal-url";
 
 /**
  * Instant Booking API. One endpoint, action-dispatched; every action resolves access first
  * (booking-link token, signed-in client, or team member) and re-reads all state server-side.
  *
  * Client actions: availability · hold · confirm · skip · cancel
- * Business actions: availability · check · schedule · reassign · cancel · details
+ * Business actions: availability · check · schedule · reassign · cancel · details · offer
  */
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
@@ -67,6 +70,8 @@ export async function POST(request: Request) {
         return businessOnly(access, () => reassign(ctx, facts, access, body));
       case "details":
         return businessOnly(access, () => details(ctx, facts, access));
+      case "offer":
+        return businessOnly(access, () => offer(ctx, facts, access, body));
       default:
         return NextResponse.json({ error: "Unknown action." }, { status: 400 });
     }
@@ -279,6 +284,30 @@ async function reassign(ctx: BookingContext, facts: BookingProjectFacts, access:
   return NextResponse.json({ ok: true });
 }
 
+async function offer(ctx: BookingContext, facts: BookingProjectFacts, access: BookingAccess, body: Record<string, unknown>) {
+  if (!access.canManage) return NextResponse.json({ error: "You don't have permission to schedule shoots." }, { status: 403 });
+  const starts = Array.isArray(body.starts) ? body.starts.map(parseStart).filter((s): s is number => s != null) : [];
+  const result = await offerTimes(ctx, facts, {
+    starts,
+    userId: userIdOrNull(ctx, body.userId),
+    message: typeof body.message === "string" ? body.message : null,
+    actor: access.actor,
+  });
+  if (!result.ok) return NextResponse.json({ error: result.message, problems: result.problems ?? [] }, { status: result.status });
+  return NextResponse.json({ ok: true, offered: result.offered });
+}
+
+async function clientBookingLink(ctx: BookingContext, facts: BookingProjectFacts): Promise<string | null> {
+  if (!facts.clientId) return null;
+  try {
+    const origin = await getBusinessPortalOriginById(ctx.businessId);
+    const token = sealBookingToken({ businessId: ctx.businessId, clientId: facts.clientId, projectId: facts.projectId });
+    return `${origin.replace(/\/$/, "")}${bookingPagePath(token)}`;
+  } catch {
+    return null;
+  }
+}
+
 async function details(ctx: BookingContext, facts: BookingProjectFacts, access: BookingAccess) {
   const appt = facts.appointment;
   const [estimate, cover] = await Promise.all([loadEstimateSummary(ctx, facts.projectId), coverUrlFor(ctx, facts.projectId)]);
@@ -299,6 +328,10 @@ async function details(ctx: BookingContext, facts: BookingProjectFacts, access: 
     schedulingStatus: effectiveSchedulingStatus(facts),
     estimate,
     timeZone: ctx.timeZone,
+    /** Everyone who can be scheduled by the business (for pickers before anything is booked). */
+    teamMembers: ctx.team.map((m) => ({ userId: m.userId, name: m.name })),
+    /** Personal booking page for the project's client (texted or emailed by the business). */
+    bookingLink: access.canManage && instantBookingActive(ctx) ? await clientBookingLink(ctx, facts) : null,
     canManage: access.canManage,
     canOverride: access.canOverride,
     schemaReady: ctx.schemaReady,
@@ -339,6 +372,7 @@ const VIOLATIONS = {
   max_per_day: "Daily shoot limit reached",
   conflict_appointment: "Overlaps another shoot",
   conflict_calendar: "Busy on Google Calendar",
+  conflict_hold: "Being booked by another client",
   travel_from_previous: "Not enough drive time from previous shoot",
   travel_to_next: "Not enough drive time to next shoot",
   start_of_day_travel: "Drive would start before working hours",

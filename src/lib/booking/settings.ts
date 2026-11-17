@@ -98,7 +98,21 @@ export type BookingSettings = {
   assignmentWeights: AssignmentWeights;
   events: EventTemplateSettings;
   travel: TravelPricingSettings;
+  reminders: ReminderSettings;
+  /** Calendar color per team member (profiles.id → #RRGGBB), shared by everyone at the business. */
+  teamColors: Record<string, string>;
 };
+
+/** Reminder before each confirmed shoot (sent by the shoot-reminders cron). */
+export type ReminderSettings = {
+  enabled: boolean;
+  /** Hours before the shoot. */
+  leadHours: number;
+  notifyClient: boolean;
+  notifyPhotographer: boolean;
+};
+
+export const REMINDER_LEAD_HOURS = [2, 12, 24, 48] as const;
 
 export const DEFAULT_WORKING_HOURS: WeeklyHours = [
   { enabled: false, start: "08:00", end: "18:00" },
@@ -177,6 +191,8 @@ export function defaultBookingSettings(): BookingSettings {
       maxFeeCents: 0,
       origin: "business",
     },
+    reminders: { enabled: true, leadHours: 24, notifyClient: true, notifyPhotographer: true },
+    teamColors: {},
   };
 }
 
@@ -267,6 +283,7 @@ export function mergeBookingSettings(stored: unknown): BookingSettings {
   const s = stored;
   const ev = isRecord(s.events) ? s.events : {};
   const tr = isRecord(s.travel) ? s.travel : {};
+  const rm = isRecord(s.reminders) ? s.reminders : {};
   const blockIds = Array.isArray(s.blockCalendarIds)
     ? [...new Set(s.blockCalendarIds.filter((x): x is string => typeof x === "string" && x.trim().length > 0))].slice(0, 20)
     : d.blockCalendarIds;
@@ -318,6 +335,19 @@ export function mergeBookingSettings(stored: unknown): BookingSettings {
       maxFeeCents: num(tr.maxFeeCents, d.travel.maxFeeCents, 0, 10_000_000),
       origin: oneOf(tr.origin, ["business", "assigned_staff"] as const, d.travel.origin),
     },
+    reminders: {
+      enabled: bool(rm.enabled, d.reminders.enabled),
+      leadHours: (REMINDER_LEAD_HOURS as readonly number[]).includes(Number(rm.leadHours)) ? Number(rm.leadHours) : d.reminders.leadHours,
+      notifyClient: bool(rm.notifyClient, d.reminders.notifyClient),
+      notifyPhotographer: bool(rm.notifyPhotographer, d.reminders.notifyPhotographer),
+    },
+    teamColors: isRecord(s.teamColors)
+      ? Object.fromEntries(
+          Object.entries(s.teamColors)
+            .filter((e): e is [string, string] => /^[0-9a-f-]{36}$/i.test(e[0]) && typeof e[1] === "string" && /^#[0-9a-f]{6}$/i.test(e[1]))
+            .slice(0, 100)
+        )
+      : {},
   };
 }
 

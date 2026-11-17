@@ -389,7 +389,7 @@ export function TimelineRow({ item }: { item: CrmTimelineItem }) {
               mine ? "text-white/75" : "text-slate-500 surface-dark:text-muted"
             )}
           >
-            <span>{mine ? "You" : "Client"}</span>
+            <span>{mine ? item.sender_name?.trim() || "You" : "Client"}</span>
             <span className={mine ? "text-white/55" : "text-slate-400 surface-dark:text-muted"}>
               {formatRelativeTime(item.created_at)}
             </span>

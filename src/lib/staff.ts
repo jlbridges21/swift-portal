@@ -522,7 +522,7 @@ export async function listStaffMembers(
   const raw = await createServiceClient();
   let query = raw
     .from("profiles")
-    .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
+    .select("id, email, full_name, avatar_url, role, disabled_at, created_at, staff_permissions")
     .eq("business_id", businessId)
     .eq("role", "staff")
     .order("created_at", { ascending: true });
@@ -542,7 +542,7 @@ export async function listTeamMembers(
   const raw = await createServiceClient();
   let query = raw
     .from("profiles")
-    .select("id, email, full_name, role, disabled_at, created_at, staff_permissions")
+    .select("id, email, full_name, avatar_url, role, disabled_at, created_at, staff_permissions")
     .eq("business_id", businessId)
     .in("role", ["staff", "admin"])
     .order("created_at", { ascending: true });
@@ -1022,7 +1022,7 @@ export async function assignProjectStaff(args: {
   projectId: string;
   userId: string;
   actor: { id: string; email: string | null };
-}): Promise<{ ok: true; row: ProjectStaffRow } | { ok: false; error: string }> {
+}): Promise<{ ok: true; created: boolean; row: ProjectStaffRow } | { ok: false; error: string }> {
   const raw = await createServiceClient();
 
   const { data: project } = await raw
@@ -1045,6 +1045,7 @@ export async function assignProjectStaff(args: {
   if (existing) {
     return {
       ok: true,
+      created: false,
       row: {
         ...existing,
         profiles: { id: staff.id, email: staff.email, full_name: staff.full_name },
@@ -1079,6 +1080,7 @@ export async function assignProjectStaff(args: {
 
   return {
     ok: true,
+    created: true,
     row: {
       ...inserted,
       profiles: { id: staff.id, email: staff.email, full_name: staff.full_name },

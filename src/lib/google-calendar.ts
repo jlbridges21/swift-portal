@@ -114,6 +114,10 @@ type OAuthState = {
   returnOrigin: string;
   exp: number;
   nonce: string;
+  /** "member": a team member connecting their own calendar (Instant Booking). Default: business. */
+  kind?: "business" | "member";
+  /** Member connects return here (an /admin path). */
+  returnPath?: string;
 };
 
 export function signOAuthState(payload: Omit<OAuthState, "exp" | "nonce"> & { exp?: number }): string {
@@ -123,6 +127,8 @@ export function signOAuthState(payload: Omit<OAuthState, "exp" | "nonce"> & { ex
     returnOrigin: payload.returnOrigin,
     exp: payload.exp ?? Date.now() + STATE_TTL_MS,
     nonce: randomBytes(16).toString("base64url"),
+    ...(payload.kind === "member" ? { kind: "member" as const } : {}),
+    ...(payload.returnPath && /^\/admin(\/|\?|$)/.test(payload.returnPath) ? { returnPath: payload.returnPath } : {}),
   };
   const data = Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
   const sig = createHmac("sha256", stateSecret()).update(data).digest("base64url");
@@ -535,6 +541,123 @@ async function accessTokenFor(businessId: string, transport: FetchLike): Promise
   return { ok: true, token: bundle.accessToken, calendarId: row.calendar_id || "primary", row };
 }
 
+// ── Team members' own Google connections (migration v133) ─────────────────
+
+export type MemberConnectionRow = {
+  user_id: string;
+  connected_email: string | null;
+  access_token_ciphertext: string;
+  refresh_token_ciphertext: string;
+  token_expires_at: string | null;
+  busy_calendar_ids: string[] | null;
+  destination_calendar_id: string | null;
+  destination_calendar_summary: string | null;
+  status: "active" | "needs_reconnect";
+  last_error: string | null;
+};
+
+export type MemberConnectionStatus = {
+  userId: string;
+  email: string | null;
+  status: "active" | "needs_reconnect";
+  busyCalendarIds: string[];
+  destinationCalendarId: string;
+  destinationCalendarSummary: string | null;
+  lastError: string | null;
+};
+
+const MEMBER_COLUMNS =
+  "user_id, connected_email, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, busy_calendar_ids, destination_calendar_id, destination_calendar_summary, status, last_error";
+
+async function readMemberConnection(businessId: string, userId: string): Promise<MemberConnectionRow | null> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db.from("team_google_calendar_connections").select(MEMBER_COLUMNS).eq("user_id", userId).maybeSingle();
+  if (error) return null; // Before v133 the table doesn't exist.
+  return (data as MemberConnectionRow | null) ?? null;
+}
+
+/** Every team member's own connection (no tokens). Empty before migration v133. */
+export async function listMemberConnections(businessId: string): Promise<MemberConnectionStatus[]> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db
+    .from("team_google_calendar_connections")
+    .select("user_id, connected_email, busy_calendar_ids, destination_calendar_id, destination_calendar_summary, status, last_error");
+  if (error || !data) return [];
+  return data.map((r) => ({
+    userId: r.user_id as string,
+    email: (r.connected_email as string | null) ?? null,
+    status: r.status as "active" | "needs_reconnect",
+    busyCalendarIds: (r.busy_calendar_ids as string[] | null) ?? [],
+    destinationCalendarId: (r.destination_calendar_id as string | null) || "primary",
+    destinationCalendarSummary: (r.destination_calendar_summary as string | null) ?? null,
+    lastError: (r.last_error as string | null) ?? null,
+  }));
+}
+
+/** Live access token for a team member's own connection (refreshed when needed). */
+export async function getMemberGoogleAccess(
+  businessId: string,
+  userId: string,
+  transport: FetchLike = fetch
+): Promise<{ ok: true; token: string; row: MemberConnectionRow } | { ok: false; error: "not_connected" | "needs_reconnect" }> {
+  const row = await readMemberConnection(businessId, userId);
+  if (!row) return { ok: false, error: "not_connected" };
+  if (row.status === "needs_reconnect") return { ok: false, error: "needs_reconnect" };
+  let accessToken = decryptCalendarSecret(row.access_token_ciphertext);
+  const exp = row.token_expires_at ? Date.parse(row.token_expires_at) : 0;
+  if (!exp || exp < Date.now() + 60_000) {
+    const db = await createTenantServiceClient(businessId);
+    try {
+      const bundle = await refreshAccessToken(decryptCalendarSecret(row.refresh_token_ciphertext), transport);
+      accessToken = bundle.accessToken;
+      await db
+        .from("team_google_calendar_connections")
+        .update({
+          access_token_ciphertext: encryptCalendarSecret(bundle.accessToken),
+          refresh_token_ciphertext: encryptCalendarSecret(bundle.refreshToken),
+          token_expires_at: bundle.expiresAt,
+          status: "active",
+          last_error: null,
+        })
+        .eq("user_id", userId);
+    } catch (err) {
+      await db
+        .from("team_google_calendar_connections")
+        .update({ status: "needs_reconnect", last_error: redact(err instanceof Error ? err.message : "refresh_failed") })
+        .eq("user_id", userId);
+      return { ok: false, error: "needs_reconnect" };
+    }
+  }
+  return { ok: true, token: accessToken, row };
+}
+
+/** OAuth callback for a team member's own calendar: their primary calendar blocks and receives shoots. */
+export async function completeMemberGoogleConnect(args: { businessId: string; userId: string; code: string }): Promise<void> {
+  const tokens = await exchangeAuthCode(args.code);
+  const calendars = await listWritableCalendars(tokens.accessToken);
+  const primary = calendars.find((c) => c.primary) ?? calendars[0];
+  const email = primary?.id?.includes("@") ? primary.id : calendars.find((c) => c.id.includes("@"))?.id ?? null;
+  const existing = await readMemberConnection(args.businessId, args.userId);
+  const db = await createTenantServiceClient(args.businessId);
+  const { error } = await db.from("team_google_calendar_connections").upsert(
+    {
+      user_id: args.userId,
+      connected_email: email,
+      access_token_ciphertext: encryptCalendarSecret(tokens.accessToken),
+      refresh_token_ciphertext: encryptCalendarSecret(tokens.refreshToken),
+      token_expires_at: tokens.expiresAt,
+      // Reconnecting keeps earlier choices; a first connect uses the primary calendar.
+      busy_calendar_ids: existing?.busy_calendar_ids?.length ? existing.busy_calendar_ids : [primary?.id || "primary"],
+      destination_calendar_id: existing?.destination_calendar_id || primary?.id || "primary",
+      destination_calendar_summary: existing?.destination_calendar_summary || primary?.summary || "Primary",
+      status: "active",
+      last_error: null,
+    },
+    { onConflict: "business_id,user_id" }
+  );
+  if (error) throw new Error(redact(error.message));
+}
+
 /** Live access token for the business connection (refreshed when needed). Instant Booking uses it. */
 export async function getGoogleCalendarAccess(
   businessId: string,
@@ -695,6 +818,7 @@ async function setSync(
     google_sync_status: string;
     google_sync_error: string | null;
     google_calendar_id?: string | null;
+    google_owner_user_id?: string | null;
   }
 ) {
   const db = await createTenantServiceClient(businessId);
@@ -725,19 +849,72 @@ type PushRow = {
   end_at?: string | null;
   assigned_user_id?: string | null;
   google_calendar_id?: string | null;
+  google_owner_user_id?: string | null;
   projects?: unknown;
 };
 
 const PUSH_COLUMNS_BASE =
   "id, project_id, proposed_at, status, google_event_id, projects(project_name, property_address, service_type, clients(name, full_name, email, phone))";
 const PUSH_COLUMNS_V132 = `${PUSH_COLUMNS_BASE}, end_at, assigned_user_id, google_calendar_id`;
+const PUSH_COLUMNS_V133 = `${PUSH_COLUMNS_V132}, google_owner_user_id`;
 
-async function loadPushRow(businessId: string, proposalId: string): Promise<{ row: PushRow | null; v132: boolean }> {
+async function loadPushRow(
+  businessId: string,
+  proposalId: string
+): Promise<{ row: PushRow | null; v132: boolean; v133: boolean }> {
   const db = await createTenantServiceClient(businessId);
+  const v133 = await db.from("shoot_proposals").select(PUSH_COLUMNS_V133).eq("id", proposalId).maybeSingle();
+  if (!v133.error) return { row: (v133.data as unknown as PushRow | null) ?? null, v132: true, v133: true };
   const extended = await db.from("shoot_proposals").select(PUSH_COLUMNS_V132).eq("id", proposalId).maybeSingle();
-  if (!extended.error) return { row: (extended.data as unknown as PushRow | null) ?? null, v132: true };
+  if (!extended.error) return { row: (extended.data as unknown as PushRow | null) ?? null, v132: true, v133: false };
   const base = await db.from("shoot_proposals").select(PUSH_COLUMNS_BASE).eq("id", proposalId).maybeSingle();
-  return { row: (base.data as unknown as PushRow | null) ?? null, v132: false };
+  return { row: (base.data as unknown as PushRow | null) ?? null, v132: false, v133: false };
+}
+
+type GoogleAccount = { ok: true; token: string; defaultCalendarId: string; email: string | null } | { ok: false; error: string };
+
+/** The Google account that holds an event: a team member's own connection, or the business's. */
+async function accountFor(businessId: string, ownerUserId: string | null, transport: FetchLike): Promise<GoogleAccount> {
+  if (ownerUserId) {
+    const member = await getMemberGoogleAccess(businessId, ownerUserId, transport);
+    if (!member.ok) {
+      return { ok: false, error: member.error === "needs_reconnect" ? "The photographer's Google Calendar needs to be reconnected." : "The photographer's Google Calendar is not connected." };
+    }
+    return { ok: true, token: member.token, defaultCalendarId: member.row.destination_calendar_id || "primary", email: member.row.connected_email };
+  }
+  const auth = await accessTokenFor(businessId, transport);
+  if (!auth.ok) return { ok: false, error: auth.error === "not_connected" ? "Google Calendar is not connected." : auth.error };
+  return { ok: true, token: auth.token, defaultCalendarId: auth.calendarId, email: auth.row.connected_email ?? null };
+}
+
+/**
+ * Where a confirmed shoot is written. "individual" strategy + the photographer connected their
+ * own Google account → their own calendar, through their connection. Otherwise the business
+ * connection (business destination calendar, or a per-person calendar shared with it).
+ */
+async function resolveEventWriter(
+  businessId: string,
+  settings: Awaited<ReturnType<typeof getAppSettings>>,
+  proposal: PushRow,
+  v132: boolean,
+  transport: FetchLike
+): Promise<{ ok: true; token: string; calendarId: string; ownerUserId: string | null; email: string | null } | { ok: false; error: string }> {
+  if (v132 && settings.booking.calendarStrategy === "individual" && proposal.assigned_user_id) {
+    const member = await getMemberGoogleAccess(businessId, proposal.assigned_user_id, transport);
+    if (member.ok) {
+      return {
+        ok: true,
+        token: member.token,
+        calendarId: member.row.destination_calendar_id || "primary",
+        ownerUserId: proposal.assigned_user_id,
+        email: member.row.connected_email,
+      };
+    }
+  }
+  const auth = await accessTokenFor(businessId, transport);
+  if (!auth.ok) return { ok: false, error: auth.error === "not_connected" ? "Google Calendar is not connected." : auth.error };
+  const calendarId = v132 ? await destinationCalendarFor(businessId, settings, proposal.assigned_user_id, auth.calendarId) : auth.calendarId;
+  return { ok: true, token: auth.token, calendarId, ownerUserId: null, email: auth.row.connected_email ?? null };
 }
 
 /**
@@ -777,7 +954,7 @@ export async function pushConfirmedShoot(
     });
     return { ok: false, error: "forced_fail" };
   }
-  const { row: proposal, v132 } = await loadPushRow(businessId, proposalId);
+  const { row: proposal, v132, v133 } = await loadPushRow(businessId, proposalId);
   if (!proposal) return { ok: false, error: "not_found" };
   const syncable = proposal.status === "confirmed" || proposal.status === "pending";
   if (!syncable) {
@@ -787,17 +964,15 @@ export async function pushConfirmedShoot(
     return { ok: false, error: "not_syncable" };
   }
 
-  const auth = await accessTokenFor(businessId, transport);
-  if (!auth.ok) {
-    const message = auth.error === "not_connected" ? "Google Calendar is not connected." : auth.error;
+  const settings = await getAppSettings(businessId);
+  const writer = await resolveEventWriter(businessId, settings, proposal, v132, transport);
+  if (!writer.ok) {
     await setSync(businessId, proposalId, {
       google_sync_status: "error",
-      google_sync_error: message,
+      google_sync_error: writer.error,
     });
-    return { ok: false, error: message };
+    return { ok: false, error: writer.error };
   }
-
-  const settings = await getAppSettings(businessId);
   const tz = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone);
   const project = proposal.projects as {
     project_name?: string;
@@ -859,31 +1034,39 @@ export async function pushConfirmedShoot(
   const attendees: { email: string; displayName?: string }[] = [];
   if (proposal.status === "confirmed") {
     const staffEmail = staffProfile?.email?.trim();
-    if (events.inviteAssignedStaff && staffEmail && staffEmail.toLowerCase() !== (auth.row.connected_email ?? "").toLowerCase()) {
+    if (events.inviteAssignedStaff && staffEmail && staffEmail.toLowerCase() !== (writer.email ?? "").toLowerCase()) {
       attendees.push({ email: staffEmail, displayName: staffProfile?.full_name || undefined });
     }
     const clientEmail = project?.clients?.email?.trim();
     if (events.inviteClient && clientEmail) attendees.push({ email: clientEmail, displayName: clientName });
   }
 
-  const targetCalendar = v132
-    ? await destinationCalendarFor(businessId, settings, proposal.assigned_user_id, auth.calendarId)
-    : auth.calendarId;
+  const targetCalendar = writer.calendarId;
   let existingEventId = proposal.google_event_id;
-  const previousCalendar = proposal.google_calendar_id || auth.calendarId;
-  // Reassigned to someone whose shoots live on another calendar: move the event.
-  if (existingEventId && v132 && previousCalendar !== targetCalendar) {
-    try {
-      await deleteGoogleEvent(auth.token, previousCalendar, existingEventId, transport);
-    } catch {
-      // The old event may already be gone; the new one is still created below.
+  const previousOwner = proposal.google_owner_user_id ?? null;
+  const ownerChanged = v133 && previousOwner !== writer.ownerUserId;
+  // Reassigned to someone whose shoots live on another calendar or another Google account:
+  // remove the old event through the account that holds it, then create the new one.
+  if (existingEventId && v132) {
+    const previous: GoogleAccount = ownerChanged
+      ? await accountFor(businessId, previousOwner, transport)
+      : { ok: true, token: writer.token, defaultCalendarId: writer.calendarId, email: writer.email };
+    const previousCalendar = proposal.google_calendar_id || (previous.ok ? previous.defaultCalendarId : targetCalendar);
+    if (ownerChanged || previousCalendar !== targetCalendar) {
+      if (previous.ok) {
+        try {
+          await deleteGoogleEvent(previous.token, previousCalendar, existingEventId, transport);
+        } catch {
+          // The old event may already be gone; the new one is still created below.
+        }
+      }
+      existingEventId = null;
     }
-    existingEventId = null;
   }
 
   try {
     const result = await upsertGoogleEvent(
-      auth.token,
+      writer.token,
       {
         proposalId,
         calendarId: targetCalendar,
@@ -903,6 +1086,7 @@ export async function pushConfirmedShoot(
       google_sync_status: "synced",
       google_sync_error: null,
       ...(v132 ? { google_calendar_id: targetCalendar } : {}),
+      ...(v133 ? { google_owner_user_id: writer.ownerUserId } : {}),
     });
     return { ok: true, eventId: result.eventId, created: result.created };
   } catch (err) {
@@ -922,16 +1106,16 @@ export async function removeShootEvent(
 ): Promise<{ ok: true; eventId: string; created: boolean } | { ok: false; error: string }> {
   const { row: proposal } = await loadPushRow(businessId, proposalId);
   if (!proposal?.google_event_id) return { ok: false, error: "no_event" };
-  const auth = await accessTokenFor(businessId, transport);
-  if (!auth.ok) {
+  const account = await accountFor(businessId, proposal.google_owner_user_id ?? null, transport);
+  if (!account.ok) {
     await setSync(businessId, proposalId, {
       google_sync_status: "error",
-      google_sync_error: auth.error === "not_connected" ? "Not connected" : auth.error,
+      google_sync_error: account.error,
     });
-    return { ok: false, error: auth.error };
+    return { ok: false, error: account.error };
   }
   try {
-    await deleteGoogleEvent(auth.token, proposal.google_calendar_id || auth.calendarId, proposal.google_event_id, transport);
+    await deleteGoogleEvent(account.token, proposal.google_calendar_id || account.defaultCalendarId, proposal.google_event_id, transport);
     await setSync(businessId, proposalId, {
       google_event_id: null,
       google_sync_status: "synced",

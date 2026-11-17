@@ -6,8 +6,9 @@
 
 import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supabase/tenant-service";
 import { getAppSettings, type AppSettings } from "@/lib/app-settings";
-import { getGoogleCalendarAccess, resolveBusinessTimeZone } from "@/lib/google-calendar";
+import { getGoogleCalendarAccess, getMemberGoogleAccess, listMemberConnections, resolveBusinessTimeZone } from "@/lib/google-calendar";
 import { listGoogleEvents } from "@/lib/google-calendar-pull";
+import { timeOffToBusy } from "@/lib/staff-account-shared";
 import { loadProjectServiceLinks } from "@/lib/project-services";
 import {
   combinedDuration,
@@ -339,6 +340,60 @@ async function loadGoogleBusy(ctx: BookingContext, calendarIds: string[], fromMs
   return { byCalendar, failed };
 }
 
+/**
+ * Busy times from team members' own Google connections (v133), read with their own token.
+ * A connection that needs reconnecting counts as unreadable (fail closed).
+ */
+async function loadMemberBusy(
+  ctx: BookingContext,
+  userIds: string[],
+  fromMs: number,
+  toMs: number
+): Promise<Map<string, { intervals: BusyInterval[]; failed: boolean }>> {
+  const out = new Map<string, { intervals: BusyInterval[]; failed: boolean }>();
+  if (!userIds.length) return out;
+  const connections = (await listMemberConnections(ctx.businessId)).filter((c) => userIds.includes(c.userId));
+  await Promise.all(
+    connections.map(async (c) => {
+      if (c.status !== "active") {
+        out.set(c.userId, { intervals: [], failed: true });
+        return;
+      }
+      const access = await getMemberGoogleAccess(ctx.businessId, c.userId);
+      if (!access.ok) {
+        out.set(c.userId, { intervals: [], failed: true });
+        return;
+      }
+      const intervals: BusyInterval[] = [];
+      let failed = false;
+      for (const calendarId of c.busyCalendarIds.length ? c.busyCalendarIds : ["primary"]) {
+        try {
+          const result = await listGoogleEvents({
+            accessToken: access.token,
+            calendarId,
+            calendarSummary: calendarId,
+            timeZone: ctx.timeZone,
+            timeMin: new Date(fromMs).toISOString(),
+            timeMax: new Date(toMs).toISOString(),
+            transport: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
+          });
+          if (result.degraded && !result.events.length) failed = true;
+          for (const e of result.events) {
+            if (e.allDay || !e.end) continue;
+            const start = Date.parse(e.start);
+            const end = Date.parse(e.end as string);
+            if (Number.isFinite(start) && Number.isFinite(end) && end > start) intervals.push({ start, end, label: "Busy" });
+          }
+        } catch {
+          failed = true;
+        }
+      }
+      out.set(c.userId, { intervals, failed });
+    })
+  );
+  return out;
+}
+
 async function loadAppointmentsInRange(ctx: BookingContext, fromMs: number, toMs: number) {
   const { data } = await ctx.db
     .from("shoot_proposals")
@@ -424,7 +479,10 @@ async function prepare(
     ctx.schemaReady ? loadActiveHolds(ctx, fromMs, toMs) : Promise.resolve([]),
   ]);
   const calendarIds = [...new Set(filtered.flatMap((m) => m.blockCalendarIds))];
-  const busy = await loadGoogleBusy(ctx, calendarIds, fromMs - DAY, toMs + DAY);
+  const [busy, memberBusy] = await Promise.all([
+    loadGoogleBusy(ctx, calendarIds, fromMs - DAY, toMs + DAY),
+    loadMemberBusy(ctx, filtered.map((m) => m.userId), fromMs - DAY, toMs + DAY),
+  ]);
 
   const travel = new TravelTable(ctx.db);
   const property = facts.propertyAddress;
@@ -457,8 +515,11 @@ async function prepare(
     );
     const holdBusy: BusyInterval[] = holds
       .filter((h) => h.assigned_user_id === member.userId && h.project_id !== facts.projectId)
-      .map((h) => ({ start: Date.parse(h.block_start_at as string), end: Date.parse(h.block_end_at as string), label: "Held" }));
-    const googleBusy = member.blockCalendarIds.flatMap((id) => busy.byCalendar.get(id) ?? []);
+      .map((h) => ({ start: Date.parse(h.block_start_at as string), end: Date.parse(h.block_end_at as string), label: "Held", kind: "hold" as const }));
+    const own = memberBusy.get(member.userId);
+    const googleBusy = [...member.blockCalendarIds.flatMap((id) => busy.byCalendar.get(id) ?? []), ...(own?.intervals ?? [])];
+    // Vacations / sick days from their own Settings (v134).
+    const timeOffBusy = timeOffToBusy(member.profile.timeOff, ctx.timeZone, fromMs - DAY, toMs + DAY);
     engineStaff.push({
       userId: member.userId,
       name: member.name,
@@ -476,10 +537,11 @@ async function prepare(
           address: a.address,
         })
       ),
-      busy: [...googleBusy, ...holdBusy],
+      busy: [...googleBusy, ...timeOffBusy, ...holdBusy],
       weights: member.weights,
       fitScore: fit.score,
-      calendarUnavailable: member.blockCalendarIds.some((id) => busy.failed.has(id)),
+      // Fail closed: if someone's calendar can't be read, they aren't offered.
+      calendarUnavailable: member.blockCalendarIds.some((id) => busy.failed.has(id)) || Boolean(own?.failed),
     });
   }
 

@@ -7,15 +7,23 @@ import { SHOOT_EVENT_MINUTES, zonedDayAndMinutes } from "@/lib/projects-calendar
 
 export type WeekSegment = { dayKey: string; allDay: boolean; startMin: number; endMin: number; startIso: string | null };
 
-/** A shoot is a one-hour block (same length Google sync writes), clipped at midnight. */
-export function shootWeekSegment(proposedAt: string, timeZone: string): WeekSegment | null {
+/** A shoot's length: its booked end (Instant Booking), else one hour (legacy proposals). */
+export function shootMinutes(proposedAt: string, endAt?: string | null): number {
+  const start = Date.parse(proposedAt);
+  const end = endAt ? Date.parse(endAt) : NaN;
+  if (Number.isFinite(start) && Number.isFinite(end) && end > start) return Math.round((end - start) / 60_000);
+  return SHOOT_EVENT_MINUTES;
+}
+
+/** A shoot block from its start to its booked end (same as the Google event), clipped at midnight. */
+export function shootWeekSegment(proposedAt: string, timeZone: string, endAt?: string | null): WeekSegment | null {
   const z = zonedDayAndMinutes(proposedAt, timeZone);
   if (!z) return null;
   return {
     dayKey: z.dayKey,
     allDay: false,
     startMin: z.minutes,
-    endMin: Math.min(24 * 60, z.minutes + SHOOT_EVENT_MINUTES),
+    endMin: Math.min(24 * 60, z.minutes + shootMinutes(proposedAt, endAt)),
     startIso: proposedAt,
   };
 }

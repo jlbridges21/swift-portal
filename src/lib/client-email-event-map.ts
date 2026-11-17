@@ -121,6 +121,16 @@ export const CLIENT_EMAIL_EVENT_MAP: Record<NotificationEventKey, ClientEmailEve
     premiumTemplate: "general",
     defaultSubjectHint: "You've been added to a project",
   },
+  shoot_reminder: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "Reminder: your shoot is coming up",
+  },
+  shoot_times_offered: {
+    messageKey: null,
+    premiumTemplate: "general",
+    defaultSubjectHint: "Pick a time for your shoot",
+  },
   video_review_client_comment: {
     messageKey: null,
     premiumTemplate: "general",

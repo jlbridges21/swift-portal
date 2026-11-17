@@ -24,6 +24,10 @@ import { addDaysToKey, zonedInstant, zonedParts } from "../src/lib/booking/time"
 import { decideServiceArea, priceTravel } from "../src/lib/booking/travel-pricing";
 import { buildEventText, renderEventTemplate } from "../src/lib/booking/event-template";
 import { openBookingToken, sealBookingToken } from "../src/lib/booking/token";
+import { reminderDecision, reminderWhen } from "../src/lib/booking/reminder-rules";
+import { parseAddressComponents } from "../src/lib/places";
+import { shootMinutes, shootWeekSegment } from "../src/lib/calendar-week";
+import { usTimeZoneFor } from "../src/lib/us-time-zones";
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -157,6 +161,12 @@ test("google busy time blocks", () => {
   assert.ok(evaluateStart(input(), s, at("12:00")).violations.includes("conflict_calendar"));
   assert.ok(evaluateStart(input(), s, at("14:30")).ok);
 });
+test("another client's hold says so (not 'Google Calendar')", () => {
+  const s = staff({ busy: [{ start: at("13:00"), end: at("14:00"), kind: "hold" }] });
+  const v = evaluateStart(input(), s, at("12:30")).violations;
+  assert.ok(v.includes("conflict_hold"));
+  assert.ok(!v.includes("conflict_calendar"));
+});
 test("max shoots per day closes the day", () => {
   const appt = { id: "x", projectId: "p", start: at("08:00"), end: at("09:00"), bufferBefore: 0, bufferAfter: 0, address: "a" };
   assert.equal(slotsForStaff(input(), staff({ maxShootsPerDay: 1, appointments: [appt] }), [DAY]).length, 0);
@@ -259,6 +269,90 @@ test("templates render known fields and keep unknown tokens", () => {
   assert.equal(text.summary, "Shoot: 1234 Maple Grove Dr");
   assert.ok(text.description.includes("https://x.test/admin/projects/1"));
   assert.equal(text.location, "1234 Maple Grove Dr");
+});
+
+console.log("reminders");
+test("reminder goes out once the lead time is reached, not before", () => {
+  const r = { enabled: true, leadHours: 24, notifyClient: true, notifyPhotographer: true };
+  const start = Date.UTC(2026, 10, 26, 15, 0);
+  const created = start - 5 * 24 * 3600_000;
+  assert.equal(reminderDecision({ startMs: start, createdMs: created, nowMs: start - 25 * 3600_000 }, r), "not_due");
+  assert.equal(reminderDecision({ startMs: start, createdMs: created, nowMs: start - 24 * 3600_000 }, r), "send");
+  assert.equal(reminderDecision({ startMs: start, createdMs: created, nowMs: start - 2 * 3600_000 }, r), "send");
+});
+test("shoots booked inside the window skip the reminder", () => {
+  const r = { enabled: true, leadHours: 24, notifyClient: true, notifyPhotographer: true };
+  const start = Date.UTC(2026, 10, 26, 15, 0);
+  assert.equal(reminderDecision({ startMs: start, createdMs: start - 3 * 3600_000, nowMs: start - 2 * 3600_000 }, r), "skip_booked_late");
+  assert.equal(reminderDecision({ startMs: start, createdMs: start - 48 * 3600_000, nowMs: start + 60_000 }, r), "skip_booked_late");
+});
+test("reminders off, or no recipients, never send", () => {
+  const start = Date.UTC(2026, 10, 26, 15, 0);
+  const args = { startMs: start, createdMs: start - 5 * 24 * 3600_000, nowMs: start - 3600_000 };
+  assert.equal(reminderDecision(args, { enabled: false, leadHours: 24, notifyClient: true, notifyPhotographer: true }), "disabled");
+  assert.equal(reminderDecision(args, { enabled: true, leadHours: 24, notifyClient: false, notifyPhotographer: false }), "disabled");
+});
+test("reminder wording uses the business time zone", () => {
+  const tz = "America/Chicago";
+  const start = Date.UTC(2026, 10, 26, 16, 0); // 10:00 AM CST
+  assert.equal(reminderWhen(start, Date.UTC(2026, 10, 25, 17, 0), tz), "tomorrow at 10:00 AM");
+  assert.equal(reminderWhen(start, Date.UTC(2026, 10, 26, 13, 0), tz), "today at 10:00 AM");
+  assert.equal(reminderWhen(start, Date.UTC(2026, 10, 24, 17, 0), tz), "Thu, Nov 26 at 10:00 AM");
+});
+test("reminder settings merge and reject unknown lead times", () => {
+  const merged = mergeBookingSettings({ reminders: { enabled: false, leadHours: 7, notifyClient: false } });
+  assert.equal(merged.reminders.enabled, false);
+  assert.equal(merged.reminders.leadHours, 24);
+  assert.equal(merged.reminders.notifyClient, false);
+  assert.equal(merged.reminders.notifyPhotographer, true);
+  assert.equal(mergeBookingSettings({ reminders: { leadHours: 48 } }).reminders.leadHours, 48);
+});
+
+console.log("address autocomplete");
+test("Google address components become street / city / state / ZIP", () => {
+  const a = parseAddressComponents(
+    [
+      { longText: "26994", shortText: "26994", types: ["street_number"] },
+      { longText: "Spyglass Drive", shortText: "Spyglass Dr", types: ["route"] },
+      { longText: "Unit 4", shortText: "4", types: ["subpremise"] },
+      { longText: "Orange Beach", shortText: "Orange Beach", types: ["locality", "political"] },
+      { longText: "Alabama", shortText: "AL", types: ["administrative_area_level_1", "political"] },
+      { longText: "36561", shortText: "36561", types: ["postal_code"] },
+      { longText: "United States", shortText: "US", types: ["country", "political"] },
+    ],
+    "26994 Spyglass Dr #4, Orange Beach, AL 36561, USA"
+  );
+  assert.equal(a.street, "26994 Spyglass Dr #4");
+  assert.equal(a.city, "Orange Beach");
+  assert.equal(a.state, "AL");
+  assert.equal(a.zip, "36561");
+  assert.equal(a.formatted, `${a.street}, Orange Beach, AL 36561`);
+});
+test("missing components fall back to Google's formatted address", () => {
+  const a = parseAddressComponents([], "County Rd 6, Gulf Shores, AL 36542, USA");
+  assert.equal(a.street, "County Rd 6");
+  assert.equal(a.formatted, "County Rd 6, Gulf Shores, AL 36542");
+});
+
+console.log("calendar");
+test("calendar blocks use the booked end time, not a fixed hour", () => {
+  const seg = shootWeekSegment("2026-11-20T20:00:00.000Z", "America/Chicago", "2026-11-20T22:00:00.000Z")!;
+  assert.equal(seg.startMin, 14 * 60);
+  assert.equal(seg.endMin, 16 * 60);
+  assert.equal(shootWeekSegment("2026-11-20T20:00:00.000Z", "America/Chicago")!.endMin, 15 * 60);
+  assert.equal(shootMinutes("2026-11-20T20:00:00.000Z", "2026-11-20T19:00:00.000Z"), 60);
+});
+test("business time zone from the address", () => {
+  assert.equal(usTimeZoneFor("AL"), "America/Chicago");
+  assert.equal(usTimeZoneFor("fl", -87.2), "America/Chicago"); // Pensacola
+  assert.equal(usTimeZoneFor("FL", -81.4), "America/New_York"); // Orlando
+  assert.equal(usTimeZoneFor("TN", -86.8), "America/Chicago"); // Nashville
+  assert.equal(usTimeZoneFor("ZZ"), null);
+});
+test("team colors keep valid hex per team member only", () => {
+  const id = "7d0957c6-6330-48ca-a530-f13d4dc15a84";
+  const merged = mergeBookingSettings({ teamColors: { [id]: "#16A34A", "not-a-user": "#000000", ["48ef9959-23c6-4555-9827-5cae51fff3a7"]: "red" } });
+  assert.deepEqual(merged.teamColors, { [id]: "#16A34A" });
 });
 
 console.log("token");

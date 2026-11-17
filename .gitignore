@@ -47,5 +47,12 @@ next-env.d.ts
 # Navigation benchmark output (scripts/perf)
 /perf-results/
 
+# Help/explainer video renders (large MP4s, kept locally)
+/Explaner_Videos/
+/Explainer_Videos_v2/
+
 # Marketing demo seed: fake client portal passwords
 scripts/marketing-demo/*.local.json
+
+# Organized copies of marketing visuals for browsing (not used by the site)
+/mockups/

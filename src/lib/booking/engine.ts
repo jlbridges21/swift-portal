@@ -16,7 +16,7 @@ import { weekdayOfKey, zonedInstant, zonedParts } from "@/lib/booking/time";
 
 const MINUTE = 60_000;
 
-export type BusyInterval = { start: number; end: number; label?: string };
+export type BusyInterval = { start: number; end: number; label?: string; /** "hold": another client is mid-booking. */ kind?: "calendar" | "hold" };
 
 export type EngineAppointment = {
   id: string;
@@ -78,6 +78,7 @@ export type SlotViolation =
   | "max_per_day"
   | "conflict_appointment"
   | "conflict_calendar"
+  | "conflict_hold"
   | "travel_from_previous"
   | "travel_to_next"
   | "start_of_day_travel"
@@ -114,6 +115,7 @@ export const VIOLATION_COPY: Record<SlotViolation, string> = {
   max_per_day: "This team member already has the maximum shoots that day.",
   conflict_appointment: "Overlaps another shoot (including buffers).",
   conflict_calendar: "Overlaps a busy time on a connected Google Calendar.",
+  conflict_hold: "Another client is booking this time right now.",
   travel_from_previous: "Not enough drive time from the previous shoot.",
   travel_to_next: "Not enough drive time to the next shoot.",
   start_of_day_travel: "Drive from the base address would start before working hours.",
@@ -184,7 +186,9 @@ export function evaluateStart(input: EngineInput, staff: EngineStaff, startMs: n
       break;
     }
   }
-  if (staff.busy.some((b) => overlaps(blockStart, blockEnd, b.start, b.end))) violations.push("conflict_calendar");
+  const busyHits = staff.busy.filter((b) => overlaps(blockStart, blockEnd, b.start, b.end));
+  if (busyHits.some((b) => b.kind !== "hold")) violations.push("conflict_calendar");
+  if (busyHits.some((b) => b.kind === "hold")) violations.push("conflict_hold");
 
   let previous: EngineAppointment | null = null;
   let next: EngineAppointment | null = null;

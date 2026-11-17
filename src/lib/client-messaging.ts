@@ -313,6 +313,7 @@ export async function buildClientCrmTimeline(
       title: m.sender_role === "admin" ? "Admin message" : "Client message",
       body: m.body,
       sender_role: m.sender_role,
+      sender_name: m.sender_name ?? null,
       is_unread: m.is_unread,
       project_id: m.project_id,
       message_id: m.id,

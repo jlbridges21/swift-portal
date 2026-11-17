@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -23,6 +23,10 @@ export type WeekGridEvent = {
   startMin: number;
   endMin: number;
   startIso: string | null;
+  /** Drive time drawn as a strip above (into the shoot) and below (home after the last shoot). */
+  padBeforeMin?: number;
+  padAfterMin?: number;
+  padLabel?: { before?: string; after?: string };
 };
 
 /** Drag + click wiring shared by the Month and Week grids. */
@@ -248,7 +252,11 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekId]);
 
-  const cols = "grid-cols-[3.25rem_repeat(7,minmax(5.5rem,1fr))] sm:grid-cols-[3.75rem_repeat(7,minmax(0,1fr))]";
+  // Seven columns for a week; one wide column for the Day view.
+  const cols =
+    days.length === 1
+      ? "grid-cols-[3.25rem_minmax(0,1fr)] sm:grid-cols-[3.75rem_minmax(0,1fr)]"
+      : "grid-cols-[3.25rem_repeat(7,minmax(5.5rem,1fr))] sm:grid-cols-[3.75rem_repeat(7,minmax(0,1fr))]";
 
   return (
     <div ref={scrollRef} data-week-grid className={cn("min-w-0 overflow-auto overscroll-contain [scrollbar-width:thin]", className)}>
@@ -321,9 +329,18 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
                 const height = Math.max(22, ((event.endMin - event.startMin) / 60) * HOUR_PX - 2);
                 const width = 100 / columns;
                 const roomy = height >= 44;
+                const padBefore = Math.max(0, Math.min(event.padBeforeMin ?? 0, event.startMin));
+                const padAfter = Math.max(0, Math.min(event.padAfterMin ?? 0, 24 * 60 - event.endMin));
+                const lane = { left: `calc(${column * width}% + 2px)`, width: `calc(${width}% - 4px)` };
                 return (
+                  <Fragment key={eventKey(event)}>
+                  {padBefore > 0 ? (
+                    <DriveStrip top={top - (padBefore / 60) * HOUR_PX + 1} height={(padBefore / 60) * HOUR_PX} lane={lane} label={event.padLabel?.before} />
+                  ) : null}
+                  {padAfter > 0 ? (
+                    <DriveStrip top={top + 1 + height} height={(padAfter / 60) * HOUR_PX} lane={lane} label={event.padLabel?.after} />
+                  ) : null}
                   <button
-                    key={eventKey(event)}
                     type="button"
                     {...bind(event)}
                     onClick={(e) => onOpenEvent(event, e.currentTarget)}
@@ -338,6 +355,7 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
                   >
                     {renderBlock(event, roomy)}
                   </button>
+                  </Fragment>
                 );
               })}
               {dragging && ghost?.dayKey === d ? (
@@ -362,6 +380,25 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Hatched drive-time strip next to a shoot block (not clickable). */
+function DriveStrip({ top, height, lane, label }: { top: number; height: number; lane: { left: string; width: string }; label?: string }) {
+  return (
+    <div
+      aria-hidden
+      title={label}
+      className="pointer-events-none absolute z-0 flex items-center overflow-hidden rounded-sm border border-dashed border-slate-400/70 px-1 text-[9px] font-medium text-slate-600 surface-dark:border-slate-500/70 surface-dark:text-slate-300"
+      style={{
+        top,
+        height: Math.max(4, height - 1),
+        ...lane,
+        backgroundImage: "repeating-linear-gradient(135deg, rgba(148,163,184,0.22) 0 6px, rgba(148,163,184,0.06) 6px 12px)",
+      }}
+    >
+      {height >= 14 && label ? <span className="truncate">{label}</span> : null}
     </div>
   );
 }

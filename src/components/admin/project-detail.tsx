@@ -2673,14 +2673,17 @@ export function AdminProjectDetail({
             >
               <div className="min-w-0 space-y-4">
                 <ProjectBookingCard projectId={initialProject.id} proposals={shootProposals} />
-                <Suspense fallback={null}>
-                  <ShootScheduling
-                    projectId={initialProject.id}
-                    proposals={shootProposals}
-                    isAdmin
-                    onUpdate={() => router.refresh()}
-                  />
-                </Suspense>
+                {shootProposals.some((p) => p.status === "pending") ? (
+                  <Suspense fallback={null}>
+                    <ShootScheduling
+                      projectId={initialProject.id}
+                      proposals={shootProposals}
+                      isAdmin
+                      pendingOnly
+                      onUpdate={() => router.refresh()}
+                    />
+                  </Suspense>
+                ) : null}
                 <Card>
                   <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
                     <CardTitle>Project Details</CardTitle>
@@ -2916,14 +2919,17 @@ export function AdminProjectDetail({
       />
 
       <ProjectBookingCard projectId={initialProject.id} proposals={shootProposals} />
-      <Suspense fallback={null}>
-        <ShootScheduling
-          projectId={initialProject.id}
-          proposals={shootProposals}
-          isAdmin
-          onUpdate={() => router.refresh()}
-        />
-      </Suspense>
+      {shootProposals.some((p) => p.status === "pending") ? (
+        <Suspense fallback={null}>
+          <ShootScheduling
+            projectId={initialProject.id}
+            proposals={shootProposals}
+            isAdmin
+            pendingOnly
+            onUpdate={() => router.refresh()}
+          />
+        </Suspense>
+      ) : null}
 
       {canViewMoney && (
         <QuoteSection

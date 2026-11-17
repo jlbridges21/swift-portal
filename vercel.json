@@ -23,8 +23,16 @@
       "schedule": "15 16 * * *"
     },
     {
+      "path": "/api/cron/staff-shoot-reminders",
+      "schedule": "5 * * * *"
+    },
+    {
       "path": "/api/cron/video-review-notifications",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/shoot-reminders",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/w9-purge",

@@ -102,7 +102,7 @@ export function ProjectsCalendar({
   permissions?: ProjectsCalendarPermissions;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<CalendarMode>("month");
+  const [mode, setMode] = useState<CalendarMode>("week");
   const [today, setToday] = useState(() => todayKey(timeZone));
   const [anchor, setAnchor] = useState(today);
   const [preview, setPreview] = useState<{ event: CalEvent; el: HTMLElement } | null>(null);

@@ -32,6 +32,7 @@ import {
   NativeSelect,
   Notice,
   PersonAvatar,
+  ToggleRow,
   WeeklyHoursEditor,
 } from "@/components/admin/booking/booking-ui";
 import {
@@ -43,6 +44,8 @@ import {
 import type { TeamProfileFields } from "@/lib/booking/team";
 import type { AssignmentWeights } from "@/lib/booking/settings";
 import { cn } from "@/lib/utils";
+import { MyGoogleCalendarButton } from "@/components/admin/booking/my-google-calendar";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 
 type DetailTab = "scheduling" | "profile" | "assignment";
 
@@ -155,6 +158,32 @@ export function TeamAvailabilityTab() {
   );
 }
 
+/** This person's own Google connection: theirs to connect, everyone else sees the status. */
+function OwnGoogleCalendarRow({ member, overview, onChanged }: { member: OverviewTeamMember; overview: BookingOverview; onChanged: () => void }) {
+  const own = overview.memberCalendars.find((c) => c.userId === member.userId) ?? null;
+  const isViewer = member.userId === overview.viewerUserId;
+  const first = member.name.split(" ")[0] || "They";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-subtle/40 px-3 py-2.5">
+      <div className="min-w-0 text-sm">
+        <p className="font-medium text-heading">{isViewer ? "Your own Google Calendar" : `${first}'s own Google Calendar`}</p>
+        <p className={cn("text-xs", own?.status === "needs_reconnect" ? "text-amber-700 surface-dark:text-amber-300" : "text-muted")}>
+          {!own
+            ? isViewer
+              ? "Not connected. Connect it so your appointments block bookings."
+              : `Not connected. ${first} can connect it from Calendar → My Google Calendar.`
+            : own.status === "needs_reconnect"
+              ? `Needs reconnecting (${own.email ?? "Google account"}). Not offered for bookings until then.`
+              : `Connected as ${own.email ?? "Google account"}.`}
+        </p>
+      </div>
+      {isViewer ? (
+        <MyGoogleCalendarButton label={own ? "Manage" : "Connect"} onClosed={onChanged} />
+      ) : null}
+    </div>
+  );
+}
+
 function MemberEditor({
   member,
   overview,
@@ -188,6 +217,9 @@ function MemberEditor({
   const services = overview.services.filter((s) => s.isActive);
   const calendars = overview.google.calendars;
   const ownHours = p.workingHours !== null;
+  // Rough "today" is fine here: it only hides entries that already ended.
+  const [cutoffDay] = useState(() => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10));
+  const upcomingOff = p.timeOff.filter((t) => t.endDay >= cutoffDay);
   const weights: AssignmentWeights = p.assignmentWeights ?? settings.booking.assignmentWeights;
 
   useEffect(() => setMessage(null), [tab]);
@@ -393,21 +425,23 @@ function MemberEditor({
 
           <div className="grid gap-4 xl:grid-cols-2">
             <BookingCard icon={Home} title="Home / base address" description="Where their day starts and ends. Used for drive times and assignments.">
-              <input
+              <AddressAutocomplete
                 aria-label="Base address"
                 value={p.baseAddress}
-                placeholder={overview.businessAddress ?? "Business address"}
-                onChange={(e) => patch({ baseAddress: e.target.value })}
-                className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                placeholder={overview.businessAddress ?? "Start typing an address"}
+                onChange={(v) => patch({ baseAddress: v })}
+                onPick={(a) => patch({ baseAddress: a.formatted })}
+                inputClassName="h-10 bg-card"
               />
-              <p className="mt-1.5 text-xs text-muted">Leave empty to use the business address.</p>
+              <p className="mt-1.5 text-xs text-muted">Pick from the suggestions so drive times are accurate. Leave empty to use the business address.</p>
             </BookingCard>
 
             <BookingCard icon={CalendarCheck2} title="Availability & calendars" description="Keep availability up to date from Google Calendar.">
+              <OwnGoogleCalendarRow member={member} overview={overview} onChanged={onSaved} />
               {!overview.google.connected ? (
-                <p className="text-sm text-muted">Connect Google Calendar in Integrations to block busy times.</p>
+                <p className="mt-3 text-sm text-muted">Connect the business Google Calendar in Integrations to also block calendars shared with it.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="mt-3 space-y-3 border-t border-border pt-3">
                   <div>
                     <FieldLabel hint={member.role === "owner" ? "Adds to the business calendars in Instant Booking." : "Busy times here block this person."}>
                       Calendars that block availability
@@ -458,6 +492,10 @@ function MemberEditor({
                 options={[
                   { value: "", label: `Business default (${settings.booking.maxShootsPerDay})` },
                   ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} shoot${i ? "s" : ""} per day` })),
+                  // A value the team member typed in their own Settings.
+                  ...(p.maxShootsPerDay != null && p.maxShootsPerDay > 12
+                    ? [{ value: String(p.maxShootsPerDay), label: `${p.maxShootsPerDay} shoots per day` }]
+                    : []),
                 ]}
               />
             </BookingCard>
@@ -471,7 +509,9 @@ function MemberEditor({
                     value: "",
                     label: settings.booking.serviceRadiusEnabled ? `Business default (${settings.booking.serviceRadiusMiles} miles)` : "No limit",
                   },
-                  ...[10, 15, 20, 25, 30, 40, 50, 75, 100].map((m) => ({ value: String(m), label: `${m} miles` })),
+                  ...[...new Set([10, 15, 20, 25, 30, 40, 50, 75, 100, ...(p.serviceRadiusMiles != null ? [p.serviceRadiusMiles] : [])])]
+                    .sort((a, b) => a - b)
+                    .map((m) => ({ value: String(m), label: `${m} miles` })),
                 ]}
               />
               {!settings.booking.serviceRadiusEnabled ? (
@@ -479,6 +519,36 @@ function MemberEditor({
               ) : null}
             </BookingCard>
           </div>
+
+          {member.role === "staff" ? (
+            <BookingCard icon={UserRound} title="Their own Settings" description="What this person can change from Settings in their own account.">
+              <div className="space-y-4">
+                <ToggleRow
+                  id={`limits-${member.userId}`}
+                  checked={p.staffCanEditLimits}
+                  onChange={(v) => patch({ staffCanEditLimits: v })}
+                  label="Let them change their max shoots per day and drive distance"
+                  description="Working hours and time off are always theirs to manage."
+                />
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-foreground">Upcoming time off</p>
+                  {upcomingOff.length ? (
+                    <ul className="space-y-1 text-sm text-heading">
+                      {upcomingOff.map((t) => (
+                        <li key={t.id}>
+                          {t.startDay === t.endDay ? t.startDay : `${t.startDay} → ${t.endDay}`}
+                          {t.startTime && t.endTime ? ` · ${t.startTime}–${t.endTime}` : " · all day"}
+                          {t.note ? <span className="text-muted"> · {t.note}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted">None. They add time off from their own Settings.</p>
+                  )}
+                </div>
+              </div>
+            </BookingCard>
+          ) : null}
 
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="flex items-start gap-3">

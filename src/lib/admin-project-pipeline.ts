@@ -83,6 +83,8 @@ export interface PipelineProjectRow {
   paid?: boolean;
   recentActivity?: string;
   confirmedShootAt?: string | null;
+  /** Booked end of that shoot (Instant Booking); null on legacy one-hour proposals. */
+  confirmedShootEndAt?: string | null;
   /** The confirmed shoot_proposals row behind confirmedShootAt (Projects calendar reschedule). */
   confirmedShootId?: string | null;
 }
@@ -249,6 +251,21 @@ function enrichProjects(
   }));
 }
 
+/** Booked end times of confirmed shoots (v132 column); empty before the migration. */
+async function loadConfirmedShootEnds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  bid: string
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from("shoot_proposals")
+    .select("project_id, end_at")
+    .eq("business_id", bid)
+    .eq("status", "confirmed")
+    .not("end_at", "is", null);
+  if (error || !data) return new Map();
+  return new Map((data as { project_id: string; end_at: string }[]).map((r) => [r.project_id, r.end_at]));
+}
+
 export interface PipelineContext {
   activeProjects: PipelineProjectRow[];
   hiddenCount: number;
@@ -322,6 +339,7 @@ export async function buildPipelineContext(
     confirmedShoots?.map((s) => [s.project_id, s.proposed_at])
   );
 
+  const shootEnds = await loadConfirmedShootEnds(supabase, bid);
   let activeProjects = enrichProjects(
     (allProjects ?? []).filter(isActiveProject),
     pendingSet,
@@ -329,7 +347,7 @@ export async function buildPipelineContext(
     confirmedShootMap,
     new Set(payments.filter((p) => p.status === "paid").map((p) => p.project_id as string)),
     new Map(confirmedShoots?.map((s) => [s.project_id, s.id]))
-  );
+  ).map((p) => ({ ...p, confirmedShootEndAt: shootEnds.get(p.id) ?? null }));
 
   // Staff: scope to assigned projects (or all if projects.view_all).
   if (profile && profile.role === "staff") {

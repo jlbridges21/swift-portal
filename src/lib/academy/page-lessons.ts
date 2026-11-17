@@ -57,6 +57,6 @@ export function lessonsForLocation(pathname: string, search: string, hash: strin
   if (p.startsWith("/admin/sites")) return { primary: "V13", related: ["V02", "V12"] };
   if (p === "/billing" || p.startsWith("/billing/")) return { primary: "V18", related: [] };
   if (p.startsWith("/partner")) return { primary: "V19", related: [] };
-  if (p.startsWith("/staff/settings")) return { primary: "V15", related: [] };
+  if (p.startsWith("/staff/settings") || p.startsWith("/admin/account")) return { primary: "V15", related: [] };
   return NONE;
 }

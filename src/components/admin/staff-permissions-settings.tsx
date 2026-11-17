@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Modal } from "@/components/ui/modal";
-import { ChevronDown, Crown, Mail, Pencil, Search, Shield, Trash2, User, UserPlus } from "lucide-react";
+import { Camera, ChevronDown, Crown, Loader2, Mail, Pencil, Search, Shield, Trash2, User, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SectionHeading } from "@/components/admin/settings-tabs/shared";
+import { PersonAvatar } from "@/components/admin/booking/booking-ui";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import type { StaffSeatSnapshot } from "@/lib/staff";
 import {
   STAFF_PERMISSION_GROUP_LABELS,
@@ -27,6 +29,7 @@ type TeamRow = {
   id: string;
   email: string;
   full_name: string | null;
+  avatar_url?: string | null;
   role: string;
   disabled_at: string | null;
   created_at: string;
@@ -39,7 +42,160 @@ type EditState = {
   email: string;
   role: string;
   permissions: StaffPermissions;
+  avatarUrl: string | null;
+  /** Null while loading, or when scheduling profiles aren't available. */
+  contact: ContactFields | null;
+  contactBaseline: string;
 };
+
+/** Optional details shared with Settings → Team & Availability. */
+type ContactFields = { displayTitle: string; phone: string; baseAddress: string };
+
+const EMPTY_CONTACT: ContactFields = { displayTitle: "", phone: "", baseAddress: "" };
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+
+function photoProblem(file: File): string | null {
+  if (!PHOTO_TYPES.includes(file.type)) return "Use a JPG, PNG or WebP photo.";
+  if (file.size > PHOTO_MAX_BYTES) return "Photos must be under 8 MB.";
+  return null;
+}
+
+async function uploadMemberPhoto(userId: string, file: File): Promise<string> {
+  const form = new FormData();
+  form.set("userId", userId);
+  form.set("file", file);
+  const res = await fetch("/api/admin/booking/photo", { method: "POST", credentials: "include", body: form });
+  const body = (await res.json().catch(() => ({}))) as { avatarUrl?: string; error?: string };
+  if (!res.ok || !body.avatarUrl) throw new Error(body.error || "Photo upload failed.");
+  return body.avatarUrl;
+}
+
+async function saveMemberContact(userId: string, contact: ContactFields): Promise<void> {
+  const res = await fetch("/api/admin/booking", {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, ...contact }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(body.error || "Couldn't save their details.");
+}
+
+/** Round photo with an upload button; used in the invite and edit modals. */
+function PhotoField({
+  name,
+  url,
+  busy,
+  onPick,
+  onRemove,
+}: {
+  name: string;
+  url: string | null;
+  busy?: boolean;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative shrink-0">
+        <PersonAvatar name={name || "?"} url={url} size={72} />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          aria-label={url ? "Replace photo" : "Upload photo"}
+          className="absolute -bottom-1 -right-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-subtle disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Camera className="h-4 w-4" aria-hidden />}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={PHOTO_TYPES.join(",")}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) onPick(f);
+          }}
+        />
+      </div>
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm font-medium text-heading">Photo (optional)</p>
+        <p className="text-[13px] text-muted">Shown to clients when they book this person. JPG, PNG or WebP, under 8 MB.</p>
+        <div className="flex flex-wrap gap-3 text-xs">
+          <button type="button" className="font-medium text-accent hover:underline disabled:opacity-60" disabled={busy} onClick={() => fileRef.current?.click()}>
+            {url ? "Replace photo" : "Upload photo"}
+          </button>
+          {url ? (
+            <button type="button" className="text-muted hover:text-red-600 disabled:opacity-60" disabled={busy} onClick={onRemove}>
+              Remove photo
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Title, phone and base address; the same fields as Team & Availability. */
+function ContactFieldsEditor({
+  idPrefix,
+  value,
+  onChange,
+}: {
+  idPrefix: string;
+  value: ContactFields;
+  onChange: (next: ContactFields) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor={`${idPrefix}-title`}>Title (optional)</Label>
+          <Input
+            id={`${idPrefix}-title`}
+            value={value.displayTitle}
+            maxLength={80}
+            onChange={(e) => onChange({ ...value, displayTitle: e.target.value })}
+            placeholder="Real Estate Photographer"
+            className="mt-1 h-11"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`${idPrefix}-phone`}>Phone (optional)</Label>
+          <Input
+            id={`${idPrefix}-phone`}
+            type="tel"
+            value={value.phone}
+            maxLength={40}
+            onChange={(e) => onChange({ ...value, phone: e.target.value })}
+            placeholder="(555) 555-0123"
+            className="mt-1 h-11"
+          />
+        </div>
+      </div>
+      <div>
+        <Label htmlFor={`${idPrefix}-address`}>Home / base address (optional)</Label>
+        <div className="mt-1">
+          <AddressAutocomplete
+            id={`${idPrefix}-address`}
+            value={value.baseAddress}
+            maxLength={300}
+            onChange={(v) => onChange({ ...value, baseAddress: v })}
+            onPick={(a) => onChange({ ...value, baseAddress: a.formatted })}
+            placeholder="Start typing where their day starts and ends"
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          Pick from the suggestions so drive times are accurate. Leave empty to use the business address.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 type InviteRole = "staff" | "admin";
 
@@ -59,6 +215,26 @@ function initials(row: TeamRow): string {
   const parts = base.split(/[\s@.]+/).filter(Boolean);
   const out = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2);
   return out.toUpperCase();
+}
+
+/** Their photo when they have one, otherwise initials (same look as before). */
+function MemberAvatar({ row, size, muted }: { row: TeamRow; size: number; muted?: boolean }) {
+  if (row.avatar_url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={row.avatar_url} alt="" width={size} height={size} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
+  }
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+        muted ? "bg-subtle text-muted" : "bg-accent text-accent-foreground"
+      )}
+      style={{ width: size, height: size }}
+    >
+      {initials(row)}
+    </span>
+  );
 }
 
 /** Short "Can access" summary from the real permission matrix. */
@@ -253,6 +429,20 @@ export function StaffPermissionsSettings() {
   const [inviteRole, setInviteRole] = useState<InviteRole>("staff");
   const [invitePerms, setInvitePerms] = useState<StaffPermissions>(() => emptyStaffPermissions());
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [invitePhoto, setInvitePhoto] = useState<File | null>(null);
+  const [invitePhotoPreview, setInvitePhotoPreview] = useState<string | null>(null);
+  const [inviteContact, setInviteContact] = useState<ContactFields>(EMPTY_CONTACT);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  useEffect(() => {
+    if (!invitePhoto) {
+      setInvitePhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(invitePhoto);
+    setInvitePhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [invitePhoto]);
 
   const load = useCallback(async () => {
     const qs = showRemoved ? "?includeDisabled=1" : "";
@@ -282,6 +472,8 @@ export function StaffPermissionsSettings() {
     setInviteName("");
     setInviteRole("staff");
     setInvitePerms(emptyStaffPermissions());
+    setInvitePhoto(null);
+    setInviteContact(EMPTY_CONTACT);
     setInviteError(null);
     setInviteOpen(true);
   }
@@ -338,6 +530,25 @@ export function StaffPermissionsSettings() {
           : ` Permissions were not saved: ${patched.data.error || "try Edit."}`;
       }
 
+      // Optional photo and details (same data as Team & Availability).
+      if (data.userId) {
+        const missed: string[] = [];
+        if (invitePhoto) {
+          await uploadMemberPhoto(data.userId, invitePhoto).catch(() => missed.push("photo"));
+        }
+        const contact = {
+          displayTitle: inviteContact.displayTitle.trim(),
+          phone: inviteContact.phone.trim(),
+          baseAddress: inviteContact.baseAddress.trim(),
+        };
+        if (contact.displayTitle || contact.phone || contact.baseAddress) {
+          await saveMemberContact(data.userId, contact).catch(() => missed.push("details"));
+        }
+        if (missed.length) {
+          follow += ` Their ${missed.join(" and ")} didn't save; add ${missed.length > 1 ? "them" : "it"} with Edit.`;
+        }
+      }
+
       setNotice(base + follow);
       setInviteOpen(false);
       await load();
@@ -354,9 +565,69 @@ export function StaffPermissionsSettings() {
       email: row.email,
       role: row.role,
       permissions: sanitized.ok ? sanitized.permissions : emptyStaffPermissions(),
+      avatarUrl: row.avatar_url ?? null,
+      contact: null,
+      contactBaseline: "",
     });
     setError(null);
     setNotice(null);
+    void loadContact(row.id);
+  }
+
+  /** Pull title / phone / base address from the team scheduling profile. */
+  async function loadContact(userId: string) {
+    const res = await fetch("/api/admin/booking", { credentials: "include" }).catch(() => null);
+    const body = (await res?.json().catch(() => null)) as {
+      profilesReady?: boolean;
+      team?: { userId: string; profile: ContactFields }[];
+    } | null;
+    if (!res?.ok || !body?.profilesReady) return;
+    const member = body.team?.find((m) => m.userId === userId);
+    const contact: ContactFields = member
+      ? { displayTitle: member.profile.displayTitle, phone: member.profile.phone, baseAddress: member.profile.baseAddress }
+      : EMPTY_CONTACT;
+    setEdit((prev) =>
+      prev && prev.userId === userId ? { ...prev, contact, contactBaseline: JSON.stringify(contact) } : prev
+    );
+  }
+
+  function setRowAvatar(userId: string, url: string | null) {
+    setStaff((prev) => prev.map((r) => (r.id === userId ? { ...r, avatar_url: url } : r)));
+    setEdit((prev) => (prev && prev.userId === userId ? { ...prev, avatarUrl: url } : prev));
+  }
+
+  async function changeEditPhoto(userId: string, file: File) {
+    const problem = photoProblem(file);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      setRowAvatar(userId, await uploadMemberPhoto(userId, file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Photo upload failed.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removeEditPhoto(userId: string) {
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/booking/photo?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Couldn't remove the photo.");
+      setRowAvatar(userId, null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't remove the photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   async function saveEdit() {
@@ -377,6 +648,15 @@ export function StaffPermissionsSettings() {
       if (!ok) {
         setError(data.error || "Could not save.");
         return;
+      }
+      if (edit.contact && JSON.stringify(edit.contact) !== edit.contactBaseline) {
+        try {
+          await saveMemberContact(edit.userId, edit.contact);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Couldn't save their details.");
+          await load();
+          return;
+        }
       }
       setNotice("Saved. Changes apply on their next request.");
       setEdit(null);
@@ -620,9 +900,7 @@ export function StaffPermissionsSettings() {
                   <tr key={s.id}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
-                          {initials(s)}
-                        </span>
+                        <MemberAvatar row={s} size={36} />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-heading">{s.full_name || s.email}</p>
                           <p className="truncate text-[13px] text-muted">{s.email}</p>
@@ -649,9 +927,7 @@ export function StaffPermissionsSettings() {
               {rows.map(({ row: s, isOwner, chips }) => (
                 <li key={s.id} className="space-y-3 px-4 py-4">
                   <div className="flex items-start gap-3">
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
-                      {initials(s)}
-                    </span>
+                    <MemberAvatar row={s} size={40} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-heading">{s.full_name || s.email}</p>
                       <p className="truncate text-[13px] text-muted">{s.email}</p>
@@ -702,9 +978,7 @@ export function StaffPermissionsSettings() {
             ) : (
               disabled.map((s) => (
                 <li key={s.id} className="flex items-center gap-3 px-5 py-3 opacity-70">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-subtle text-xs font-semibold text-muted">
-                    {initials(s)}
-                  </span>
+                  <MemberAvatar row={s} size={36} muted />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-heading">{s.full_name || s.email}</p>
                     <p className="truncate text-[13px] text-muted">{s.email} · Removed. Invite again to reactivate.</p>
@@ -765,6 +1039,22 @@ export function StaffPermissionsSettings() {
                 className="mt-1 h-11"
               />
             </div>
+          </div>
+
+          <div className="space-y-4 rounded-xl border border-border p-4">
+            <PhotoField
+              name={inviteName || inviteEmail}
+              url={invitePhotoPreview}
+              busy={busy}
+              onPick={(file) => {
+                const problem = photoProblem(file);
+                setInviteError(problem);
+                if (!problem) setInvitePhoto(file);
+              }}
+              onRemove={() => setInvitePhoto(null)}
+            />
+            <ContactFieldsEditor idPrefix="staff-invite" value={inviteContact} onChange={setInviteContact} />
+            <p className="text-xs text-muted">All optional. You can add or change these later in Team &amp; Availability.</p>
           </div>
 
           <fieldset>
@@ -854,6 +1144,24 @@ export function StaffPermissionsSettings() {
                   className="mt-1 h-11"
                 />
               </div>
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-border p-4">
+              <PhotoField
+                name={edit.fullName || edit.email}
+                url={edit.avatarUrl}
+                busy={photoBusy}
+                onPick={(file) => void changeEditPhoto(edit.userId, file)}
+                onRemove={() => void removeEditPhoto(edit.userId)}
+              />
+              {edit.contact ? (
+                <ContactFieldsEditor
+                  idPrefix="staff-edit"
+                  value={edit.contact}
+                  onChange={(contact) => setEdit({ ...edit, contact })}
+                />
+              ) : null}
+              <p className="text-xs text-muted">Photo changes save right away. Same details as Team &amp; Availability.</p>
             </div>
 
             <div className="flex flex-wrap gap-2">

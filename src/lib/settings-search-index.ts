@@ -191,8 +191,8 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     id: "contact",
     sectionId: "contact",
     label: "Contact Information",
-    description: "Email, phone, website, and mailing address.",
-    keywords: ["contact", "phone", "address", "support email", "website"],
+    description: "Email, phone, website, mailing address and time zone.",
+    keywords: ["contact", "phone", "address", "support email", "website", "time zone", "timezone"],
   },
   {
     id: "download-gate",
@@ -322,7 +322,7 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
     id: "instant-booking",
     sectionId: "booking",
     label: "Instant Booking",
-    description: "Let clients book shoots: mode, calendars, hours, buffers, travel rules, self-service.",
+    description: "Let clients book shoots: mode, calendars, hours, buffers, travel rules, self-service, reminders.",
     keywords: [
       "instant booking",
       "booking",
@@ -341,6 +341,9 @@ const FIELD_ENTRIES: Omit<SettingsSearchEntry, "href">[] = [
       "cancel",
       "service radius",
       "calendar event",
+      "reminder",
+      "shoot reminder",
+      "24 hour reminder",
     ],
   },
   {
