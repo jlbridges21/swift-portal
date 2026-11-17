@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ColorField } from "@/components/ui/color-field";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import { BrandAssetField } from "@/components/admin/brand-asset-field";
 import { ServicesSettingsCard } from "@/components/admin/services-settings-card";
 import { TravelFeesOnboarding } from "@/components/admin/booking/travel-onboarding";
@@ -140,6 +141,8 @@ export function OnboardingWizard({
     state: initial.business.state ?? "",
     postalCode: initial.business.postalCode ?? "",
   });
+  /** Country and time zone from an address picked from the suggestions (saved with Identity). */
+  const [pickedPlace, setPickedPlace] = useState<{ country: string; timeZone: string | null } | null>(null);
   /** Set when the Services step sends the user back here to add an address for travel fees. */
   const [addressFocus, setAddressFocus] = useState(false);
   const [branding, setBranding] = useState({
@@ -253,7 +256,9 @@ export function OnboardingWizard({
           city: identity.city.trim(),
           state: identity.state.trim(),
           postalCode: identity.postalCode.trim(),
+          ...(pickedPlace?.country ? { country: pickedPlace.country } : {}),
         },
+        ...(pickedPlace?.timeZone ? { workflow: { businessDefaults: { timezone: pickedPlace.timeZone } } } : {}),
       });
       const returnToServices = addressFocus && identity.postalCode.trim();
       setAddressFocus(false);
@@ -474,11 +479,24 @@ export function OnboardingWizard({
                 </p>
                 <div className="space-y-2">
                   <Label htmlFor="ob-address1">Street address</Label>
-                  <Input
+                  <AddressAutocomplete
                     id="ob-address1"
-                    autoComplete="street-address"
+                    placeholder="Start typing your business address"
                     value={identity.addressLine1}
-                    onChange={(e) => setIdentity((p) => ({ ...p, addressLine1: e.target.value }))}
+                    onChange={(v) => {
+                      setIdentity((p) => ({ ...p, addressLine1: v }));
+                      setPickedPlace(null);
+                    }}
+                    onPick={(a) => {
+                      setIdentity((p) => ({
+                        ...p,
+                        addressLine1: a.street || a.formatted,
+                        city: a.city,
+                        state: a.state,
+                        postalCode: a.zip,
+                      }));
+                      setPickedPlace({ country: a.country, timeZone: a.timeZone });
+                    }}
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
