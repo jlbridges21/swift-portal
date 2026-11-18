@@ -195,23 +195,24 @@ export function AppointmentModal({
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="appt-title">
       <button type="button" className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} aria-label="Close" />
-      <div className="relative z-10 flex max-h-[calc(100dvh-24px)] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl">
-        <div className="flex items-start gap-4 border-b border-border px-5 py-4 sm:px-6">
+      <div className="phone-sheet-max-h relative z-10 flex w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-border bg-card shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl">
+        <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border sm:hidden" aria-hidden />
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 pb-3 pt-2 sm:items-start sm:gap-4 sm:px-6 sm:py-4">
           <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent sm:inline-flex">
             <CalendarDays className="h-6 w-6" aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id="appt-title" className="text-xl font-bold tracking-tight text-heading">
+            <h2 id="appt-title" className="text-lg font-bold tracking-tight text-heading sm:text-xl">
               {mode === "reschedule" ? "Reschedule shoot" : "Scheduled shoot details"}
             </h2>
-            <p className="text-sm text-muted">View and manage this shoot: assignment, route and timing.</p>
+            <p className="hidden text-sm text-muted sm:block">View and manage this shoot: assignment, route and timing.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg border border-border p-2 text-muted hover:text-heading">
+          <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 rounded-lg border border-border p-2 text-muted hover:text-heading">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           {loading && !data ? (
             <p className="flex items-center gap-2 py-16 text-sm text-muted justify-center">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading shoot…
@@ -458,7 +459,7 @@ export function AppointmentModal({
         </div>
 
         {data ? (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border bg-subtle/40 px-5 py-3 sm:px-6">
+          <div className="phone-sheet-bottom-pad grid shrink-0 grid-cols-2 gap-2 border-t border-border bg-subtle/40 px-4 pt-3 sm:flex sm:flex-wrap sm:items-center sm:px-6 sm:py-3 [&>*]:min-w-0 [&_button]:w-full sm:[&_button]:w-auto">
             {data.canManage && appt && data.teamOptions.length > 1 && mode === "view" ? (
               <Button variant="outline" className="min-h-11" disabled={!changingStaff || busy !== null} onClick={() => reassign()}>
                 {busy === "reassign" ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundCog className="h-4 w-4" />} Reassign
@@ -475,7 +476,7 @@ export function AppointmentModal({
               </Button>
             </Link>
             {data.canManage && appt ? (
-              <Button variant="outline" className="ml-auto min-h-11 border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelOpen(true)}>
+              <Button variant="outline" className="min-h-11 border-red-300 sm:ml-auto text-red-700 hover:bg-red-50" onClick={() => setCancelOpen(true)}>
                 <AlertTriangle className="h-4 w-4" /> Cancel shoot
               </Button>
             ) : null}

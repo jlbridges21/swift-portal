@@ -206,6 +206,17 @@ body {
   }
 }
 
+/* Phone bottom sheets: never taller than the space below the status bar / notch
+   (installed PWA draws under it), so the sheet's top edge and header stay visible. */
+@media (max-width: 639px) {
+  .phone-sheet-max-h {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 0.75rem);
+  }
+  .phone-sheet-bottom-pad {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Fixed drawers/modals that scroll above the admin PWA bottom nav */
 .admin-pwa-fixed-bottom-pad {
   padding-bottom: calc(var(--admin-pwa-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
