@@ -231,6 +231,11 @@ function PortalHero({ ctx }: { ctx: PortalCtx }) {
   const showFavorites = !!ctx.favorites;
   const locked = !ctx.downloadsUnlocked;
   const canDownloadAll = ctx.downloadsUnlocked && ctx.downloadableFileCount > 0;
+  // One obvious next step: when a payment is what stands between the client and their files,
+  // the main button says so ("Pay $X to download") and takes them straight to paying.
+  const payToUnlock = locked && ctx.financial.kind === "due" && ctx.availableTabs.has("pay") && !ctx.isPreview;
+  const fileCountLabel =
+    ctx.downloadableFileCount > 0 ? ` · ${ctx.downloadableFileCount} ${ctx.downloadableFileCount === 1 ? "file" : "files"}` : "";
 
   function lockedClick() {
     if (ctx.financial.kind === "due") {
@@ -276,7 +281,15 @@ function PortalHero({ ctx }: { ctx: PortalCtx }) {
           </div>
           {ctx.hasAnyMedia || ctx.photos.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {locked ? (
+              {payToUnlock ? (
+                <button
+                  type="button"
+                  onClick={() => ctx.goTo("pay", undefined, "payments")}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground shadow-sm transition hover:bg-accent-hover"
+                >
+                  <CreditCard className="h-4 w-4" /> Pay {formatCurrency(ctx.financial.dueCents)} to download
+                </button>
+              ) : locked ? (
                 <button
                   type="button"
                   onClick={lockedClick}
@@ -291,7 +304,7 @@ function PortalHero({ ctx }: { ctx: PortalCtx }) {
                   disabled={!ctx.zipAll.ready || ctx.zipAll.active}
                   className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground shadow-sm transition hover:bg-accent-hover disabled:opacity-60"
                 >
-                  <Download className="h-4 w-4" /> {ctx.zipAll.active ? "Preparing…" : "Download All"}
+                  <Download className="h-4 w-4" /> {ctx.zipAll.active ? "Preparing…" : `Download All${fileCountLabel}`}
                 </button>
               ) : null}
               {showFavorites && !locked ? (

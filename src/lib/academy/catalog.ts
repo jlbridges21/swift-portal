@@ -1,5 +1,5 @@
 /**
- * ShootPortal Academy course catalog (the 18 owner lessons + the client guide).
+ * ShootPortal Academy course catalog (the owner lessons + the client guide).
  * Videos live on the ShootPortal YouTube channel; thumbnails are in /public/academy/<key>.jpg.
  * Lesson keys are stored in academy_lesson_progress (migration v130), so never rename a key.
  * Generated from Explainer_Videos_v2 (upload log, chapter files, real durations).
@@ -197,6 +197,26 @@ const ALL_LESSONS: AcademyLesson[] = [
       { t: 87, title: "The Shoot Calendar" },
       { t: 128, title: "Google Calendar" },
       { t: 144, title: "Assign staff" },
+    ],
+  },
+  {
+    key: "V20",
+    slug: "project-page-deliver-and-get-paid",
+    title: "Deliver, share and get paid from the project page",
+    description: "Send your client one link to view, pay and Download All, and share the project with anyone else.",
+    module: 4,
+    youtubeId: "FOZApNLmudY",
+    durationSeconds: 235,
+    tryHref: "/admin/projects",
+    tryLabel: "Open a project",
+    chapters: [
+      { t: 0, title: "Your project page" },
+      { t: 16, title: "Upload media" },
+      { t: 29, title: "Proposals & payments" },
+      { t: 52, title: "Send to client" },
+      { t: 107, title: "Portal invites" },
+      { t: 135, title: "Share with others" },
+      { t: 185, title: "Downloads & Delivered" },
     ],
   },
   {
