@@ -52,7 +52,8 @@ export default async function OnboardingPage() {
     portalUrl,
     business: {
       businessName: settings.business.businessName,
-      primaryContactEmail: settings.business.primaryContactEmail,
+      // Prefill with the email they signed up with until they save their own.
+      primaryContactEmail: settings.business.primaryContactEmail || profile.email || "",
       phoneNumber: settings.business.phoneNumber,
       addressLine1: settings.business.addressLine1,
       city: settings.business.city,

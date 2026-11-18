@@ -50,7 +50,7 @@ export async function GET() {
       portalUrl,
       business: {
         businessName: snap.settings.business.businessName,
-        primaryContactEmail: snap.settings.business.primaryContactEmail,
+        primaryContactEmail: snap.settings.business.primaryContactEmail || auth.profile.email || "",
         phoneNumber: snap.settings.business.phoneNumber,
         addressLine1: snap.settings.business.addressLine1,
         city: snap.settings.business.city,

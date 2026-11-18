@@ -48,8 +48,8 @@ export function draftFromService(service: BusinessServiceRow | null): ServiceDra
     includes: service ? [...service.includes] : [],
     notes: service?.notes ?? "",
     hidePricing: service?.hide_pricing ?? false,
-    // New services default to an hour; existing rows without the column (pre-v132) hide the field.
-    durationMinutes: service ? (typeof service.duration_minutes === "number" ? service.duration_minutes : null) : 60,
+    // Default to an hour (new services, and starter services saved without a time on site).
+    durationMinutes: typeof service?.duration_minutes === "number" ? service.duration_minutes : 60,
   };
 }
 

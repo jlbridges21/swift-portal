@@ -20,6 +20,7 @@ import { LandingEditorPreviewFrame } from "@/components/landing/landing-editor-p
 import { SiteHome } from "@/components/website/site-home";
 import { SiteNavProvider } from "@/components/website/site-ui";
 import { StepIntro } from "@/components/onboarding/step-intro";
+import { InviteTeammateDialog, PortalDomainDialog } from "@/components/onboarding/settings-dialogs";
 import { BookingStep } from "@/components/onboarding/booking-step";
 import { PreliminaryEstimateToggle } from "@/components/onboarding/preliminary-toggle";
 import { buildSiteView } from "@/lib/website/view";
@@ -149,6 +150,8 @@ export function OnboardingWizard({
   const search = useSearchParams();
   const [data, setData] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [domainOpen, setDomainOpen] = useState(false);
   const [identity, setIdentity] = useState({
     businessName: initial.business.businessName,
     primaryContactEmail: initial.business.primaryContactEmail,
@@ -425,25 +428,39 @@ export function OnboardingWizard({
       </header>
 
       <nav aria-label="Setup progress" className="mb-8">
-        <ol className="flex flex-wrap gap-2">
+        {/* One row of seven: numbered dots with the step name under each (names hide on phones). */}
+        <ol className="grid grid-cols-7 gap-1 sm:gap-2">
           {ONBOARDING_STEP_IDS.map((id, i) => {
             const done = data.state.completedSteps.includes(id);
             const active = id === step;
             return (
-              <li key={id}>
+              <li key={id} className="min-w-0">
                 <button
                   type="button"
                   disabled={busy || i > stepIdx + 1}
                   onClick={() => void runAction({ action: "goto", step: id })}
                   aria-current={active ? "step" : undefined}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium transition",
-                    active && "bg-accent text-white",
-                    done && !active && "bg-teal-50 text-teal-800",
-                    !done && !active && "bg-subtle text-muted"
-                  )}
+                  aria-label={`Step ${i + 1}: ${STEP_LABELS[id]}`}
+                  className="group flex w-full flex-col items-center gap-1.5 rounded-lg px-0.5 py-1 text-center transition enabled:hover:bg-subtle disabled:cursor-default"
                 >
-                  {i + 1}. {STEP_LABELS[id]}
+                  <span
+                    className={cn(
+                      "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition",
+                      active && "bg-accent text-white ring-4 ring-accent/15",
+                      done && !active && "bg-teal-50 text-teal-800",
+                      !done && !active && "bg-subtle text-muted"
+                    )}
+                  >
+                    {done && !active ? <Check className="h-3.5 w-3.5" aria-hidden /> : i + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "hidden text-[11px] font-medium leading-tight sm:block",
+                      active ? "text-heading" : done ? "text-teal-800" : "text-muted"
+                    )}
+                  >
+                    {STEP_LABELS[id]}
+                  </span>
                 </button>
               </li>
             );
@@ -826,9 +843,9 @@ export function OnboardingWizard({
                   <p className="text-sm text-heading">
                     <span className="font-medium">Your own web address (optional).</span>{" "}
                     <span className="text-muted">Clients can open your portal at portal.yourstudio.com. </span>
-                    <Link href="/admin/settings#settings-custom-domain" className="font-medium text-accent underline">
-                      Set it up in Settings
-                    </Link>
+                    <button type="button" onClick={() => setDomainOpen(true)} className="font-medium text-accent underline">
+                      Set it up now
+                    </button>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -929,9 +946,13 @@ export function OnboardingWizard({
                   Send yourself a test request <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
-              <Link href="/admin/settings#settings-staff" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+              <button
+                type="button"
+                onClick={() => setInviteOpen(true)}
+                className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent hover:underline"
+              >
                 <UserPlus className="h-4 w-4" aria-hidden /> Invite a teammate (optional)
-              </Link>
+              </button>
               <div className="flex flex-wrap gap-2 border-t border-border pt-4">
                 {back("landing")}
                 <Button type="button" variant="accent" disabled={busy || !data.gates.finish.ok} onClick={() => void finish()}>
@@ -943,6 +964,9 @@ export function OnboardingWizard({
           )}
         </CardContent>
       </Card>
+
+      <InviteTeammateDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <PortalDomainDialog open={domainOpen} onClose={() => setDomainOpen(false)} />
 
       {/* Help for this step, under the card: collapsed until opened. */}
       <div className="mt-4">
