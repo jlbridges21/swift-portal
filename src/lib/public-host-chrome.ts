@@ -4,6 +4,7 @@ import { PORTAL_LOGO_SIZE } from "@/lib/brand-logo-size";
 import { metadataFromBusiness, SITE } from "@/lib/site-metadata";
 import { getPublicHostContext, type PublicHostContext } from "@/lib/host-resolution";
 import type { Metadata } from "next";
+import { parseSurfaceMode, type SurfaceMode } from "@/lib/brand-color";
 
 export function platformPortalBrand(): PortalBrand {
   const b = PLATFORM_BUSINESS_DEFAULTS;
@@ -38,6 +39,8 @@ export function platformPortalBrand(): PortalBrand {
 export async function publicHostBrand(): Promise<{
   host: PublicHostContext;
   brand: PortalBrand;
+  /** The business's portal theme (Light / Dark / Primary color); light on the platform host. */
+  surfaceMode: SurfaceMode;
   metadata: Metadata;
 }> {
   const host = await getPublicHostContext();
@@ -46,12 +49,14 @@ export async function publicHostBrand(): Promise<{
     return {
       host,
       brand: getPortalBrandFromSettings(settings),
+      surfaceMode: parseSurfaceMode(settings.business.surfaceMode),
       metadata: metadataFromBusiness(settings.business),
     };
   }
   return {
     host,
     brand: platformPortalBrand(),
+    surfaceMode: "light",
     metadata: {
       title: SITE.title,
       description: SITE.description,
