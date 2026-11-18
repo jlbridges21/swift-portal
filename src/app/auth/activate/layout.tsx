@@ -10,6 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ActivateLayout({ children }: { children: React.ReactNode }) {
-  const { brand } = await publicHostBrand();
-  return <BrandProvider brand={brand}>{children}</BrandProvider>;
+  // Same theme as the business's client portal (Light / Dark / Primary color).
+  const { brand, surfaceMode } = await publicHostBrand();
+  return <BrandProvider brand={brand} surfaceMode={surfaceMode}>{children}</BrandProvider>;
 }
