@@ -22,6 +22,8 @@ import { ChevronRight, GripVertical, Loader2, Plus, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Modal } from "@/components/ui/modal";
+import { formatDuration } from "@/lib/booking/settings";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { BusinessServiceRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -41,10 +43,11 @@ function formatPrice(cents: number | null): string {
 }
 
 function serviceSubtitle(service: BusinessServiceRow): string {
-  if (service.hide_pricing) return "Custom proposal";
+  const onSite = typeof service.duration_minutes === "number" ? ` · ${formatDuration(service.duration_minutes)} on site` : "";
+  if (service.hide_pricing) return `Custom proposal${onSite}`;
   const n = service.includes.filter((item) => item.trim()).length;
-  if (n === 0) return "No items listed";
-  return `${n} ${n === 1 ? "item" : "items"} included`;
+  if (n === 0) return `No items listed${onSite}`;
+  return `${n} ${n === 1 ? "item" : "items"} included${onSite}`;
 }
 
 function StatusPill({ active }: { active: boolean }) {
@@ -123,7 +126,13 @@ function ServiceRow({
 /** Which service the editor shows: an existing id, a new one, or closed. */
 type EditorTarget = { kind: "existing"; id: string } | { kind: "new" } | null;
 
-export function ServicesSettingsCard() {
+export function ServicesSettingsCard({
+  editorPresentation = "auto",
+}: {
+  /** "auto": side panel when wide, bottom sheet when narrow (Settings). "modal": a centered dialog (onboarding). */
+  editorPresentation?: "auto" | "modal";
+} = {}) {
+  const asModal = editorPresentation === "modal";
   const bridge = useServicesTabBridge();
   const [services, setServices] = useState<BusinessServiceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,11 +256,22 @@ export function ServicesSettingsCard() {
     void persistOrder(arrayMove(services, index, nextIndex), services);
   }
 
+  /** Time on site saves on its own so a database without v132 never blocks the rest of the save. */
+  async function saveDuration(id: string, minutes: number | null, previous: number | null | undefined) {
+    if (minutes == null || minutes === previous) return;
+    try {
+      await savePatch(id, { duration_minutes: minutes });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't save the time on site");
+    }
+  }
+
   async function saveDraft(draft: ServiceDraft): Promise<boolean> {
     const name = draft.name.trim();
     if (!name) return false;
     try {
       if (target?.kind === "existing") {
+        const before = services.find((row) => row.id === target.id)?.duration_minutes;
         await savePatch(target.id, {
           name,
           description: draft.description,
@@ -261,6 +281,7 @@ export function ServicesSettingsCard() {
           notes: draft.notes,
           hide_pricing: draft.hidePricing,
         });
+        await saveDuration(target.id, draft.durationMinutes, before);
         toast.success("Service saved");
       } else {
         const res = await fetch("/api/admin/services", {
@@ -282,6 +303,7 @@ export function ServicesSettingsCard() {
         if (!res.ok) throw new Error(data.error || "Could not create");
         const created = data.service as BusinessServiceRow;
         setServices((prev) => [...prev, created]);
+        await saveDuration(created.id, draft.durationMinutes, created.duration_minutes);
         setEditorDirty(false);
         setTarget({ kind: "existing", id: created.id });
         toast.success("Service created");
@@ -348,9 +370,21 @@ export function ServicesSettingsCard() {
       service={selected}
       position={selectedIndex}
       count={services.length}
-      showTitle={wide}
+      showTitle={wide && !asModal}
       onCancel={closeEditor}
-      onSave={saveDraft}
+      onSave={
+        asModal
+          ? async (draft) => {
+              const ok = await saveDraft(draft);
+              // A dialog closes once saved; the list shows the result.
+              if (ok) {
+                setEditorDirty(false);
+                setTarget(null);
+              }
+              return ok;
+            }
+          : saveDraft
+      }
       onToggleActive={() => selected && void toggleActive(selected)}
       onRequestDelete={() => selected && setDeleteId(selected.id)}
       onMove={(direction) => selected && move(selected.id, direction)}
@@ -368,7 +402,7 @@ export function ServicesSettingsCard() {
         </div>
       ) : null}
 
-      <div className={cn(wide && editorOpen && "grid grid-cols-[minmax(0,1fr)_minmax(320px,380px)] items-start gap-4")}>
+      <div className={cn(wide && !asModal && editorOpen && "grid grid-cols-[minmax(0,1fr)_minmax(320px,380px)] items-start gap-4")}>
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="hidden items-center border-b border-border pl-11 pr-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_8.5rem_6rem_1.25rem] sm:gap-x-3">
             <span>Service</span>
@@ -411,7 +445,7 @@ export function ServicesSettingsCard() {
           )}
         </div>
 
-        {wide && editor ? (
+        {wide && !asModal && editor ? (
           <aside
             aria-label={selected ? `Edit ${selected.name}` : "New service"}
             className="sticky top-4 rounded-2xl border border-border bg-card p-5"
@@ -421,7 +455,16 @@ export function ServicesSettingsCard() {
         ) : null}
       </div>
 
-      {!wide ? (
+      {asModal ? (
+        <Modal
+          open={editorOpen}
+          onClose={closeEditor}
+          title={selected ? selected.name : "New service"}
+          className="sm:max-w-xl"
+        >
+          {editor}
+        </Modal>
+      ) : !wide ? (
         <BottomSheet
           open={editorOpen && !offscreen}
           onClose={closeEditor}

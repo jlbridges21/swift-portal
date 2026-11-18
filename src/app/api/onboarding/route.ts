@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseSurfaceMode } from "@/lib/brand-color";
 import { requireAdminApi } from "@/lib/api-auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { getOnboardingSnapshot, applyOnboardingAction } from "@/lib/onboarding-server";
@@ -49,7 +50,7 @@ export async function GET() {
       portalUrl,
       business: {
         businessName: snap.settings.business.businessName,
-        primaryContactEmail: snap.settings.business.primaryContactEmail,
+        primaryContactEmail: snap.settings.business.primaryContactEmail || auth.profile.email || "",
         phoneNumber: snap.settings.business.phoneNumber,
         addressLine1: snap.settings.business.addressLine1,
         city: snap.settings.business.city,
@@ -58,6 +59,10 @@ export async function GET() {
         logoUrl: snap.settings.business.logoUrl,
         brandPrimaryColor: snap.settings.business.brandPrimaryColor,
         brandAccentColor: snap.settings.business.brandAccentColor,
+        surfaceMode: parseSurfaceMode(snap.settings.business.surfaceMode),
+        country: snap.settings.business.country ?? "",
+        timeZone: snap.settings.workflow.businessDefaults.timezone,
+        timeZoneMode: snap.settings.workflow.businessDefaults.timezoneMode,
       },
       landing: {
         headline: snap.settings.landing.hero.headline,

@@ -413,7 +413,7 @@ const NEVER_DELEGATED_NOTE = (
   </p>
 );
 
-export function StaffPermissionsSettings() {
+export function StaffPermissionsSettings({ startWithInvite = false }: { startWithInvite?: boolean } = {}) {
   const [staff, setStaff] = useState<TeamRow[]>([]);
   const [seats, setSeats] = useState<StaffSeatSnapshot | null>(null);
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
@@ -423,7 +423,8 @@ export function StaffPermissionsSettings() {
   const [notice, setNotice] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
 
-  const [inviteOpen, setInviteOpen] = useState(false);
+  // Setup wizard opens this straight to the invite form.
+  const [inviteOpen, setInviteOpen] = useState(startWithInvite);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<InviteRole>("staff");

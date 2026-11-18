@@ -22,13 +22,18 @@ import {
 } from "@/lib/setup-completeness";
 
 /** Bump when adding/removing/renaming wizard steps. See file header. */
-export const ONBOARDING_VERSION = 1;
+export const ONBOARDING_VERSION = 2;
 
+/**
+ * v2 (2026-11): "welcome" folded into the business step (intro video at the top) and a
+ * "booking" step (how clients get a time, working hours, Google Calendar) added after services.
+ * Ids are stable: "identity" = Your business, "landing" = Your website, "finish" = You're live.
+ */
 export const ONBOARDING_STEP_IDS = [
-  "welcome",
   "identity",
   "branding",
   "services",
+  "booking",
   "payments",
   "landing",
   "finish",
@@ -60,7 +65,7 @@ export function emptyOnboardingState(now = new Date()): OnboardingState {
   const iso = now.toISOString();
   return {
     version: ONBOARDING_VERSION,
-    currentStep: "welcome",
+    currentStep: "identity",
     completedSteps: [],
     skippedSteps: [],
     startedAt: iso,
@@ -80,7 +85,8 @@ export function parseOnboardingState(raw: unknown): OnboardingState {
   const skipped = Array.isArray(o.skippedSteps)
     ? o.skippedSteps.filter(isOnboardingStepId)
     : [];
-  const current = isOnboardingStepId(o.currentStep) ? o.currentStep : "welcome";
+  // v1 businesses parked on the removed "welcome" step (or anything unknown) resume at the start.
+  const current = isOnboardingStepId(o.currentStep) ? o.currentStep : "identity";
 
   return {
     version: typeof o.version === "number" && Number.isFinite(o.version) ? Math.trunc(o.version) : 1,

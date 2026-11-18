@@ -448,6 +448,8 @@ export interface BusinessServiceRow {
   display_order: number;
   is_active: boolean;
   aliases: string[];
+  /** On-site minutes (v132 Instant Booking). Missing before v132. */
+  duration_minutes?: number | null;
 }
 
 export type QuoteStatus = "draft" | "sent" | "approved" | "changes_requested";

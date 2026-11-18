@@ -22,6 +22,10 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
 import type { BusinessServiceRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { MinutesSelect } from "@/components/admin/booking/booking-ui";
+
+/** Time-on-site choices (minutes). */
+const SERVICE_DURATIONS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300, 360, 480];
 
 export interface ServiceDraft {
   name: string;
@@ -31,6 +35,8 @@ export interface ServiceDraft {
   includes: string[];
   notes: string;
   hidePricing: boolean;
+  /** On-site minutes. null = not available (database before v132). */
+  durationMinutes: number | null;
 }
 
 export function draftFromService(service: BusinessServiceRow | null): ServiceDraft {
@@ -42,6 +48,8 @@ export function draftFromService(service: BusinessServiceRow | null): ServiceDra
     includes: service ? [...service.includes] : [],
     notes: service?.notes ?? "",
     hidePricing: service?.hide_pricing ?? false,
+    // Default to an hour (new services, and starter services saved without a time on site).
+    durationMinutes: typeof service?.duration_minutes === "number" ? service.duration_minutes : 60,
   };
 }
 
@@ -247,6 +255,20 @@ export function ServiceEditor({
           />
         </div>
       </div>
+
+      {draft.durationMinutes != null ? (
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idBase}-duration`}>Time on site</Label>
+          <MinutesSelect
+            id={`${idBase}-duration`}
+            value={draft.durationMinutes}
+            onChange={(durationMinutes) => patch({ durationMinutes })}
+            values={SERVICE_DURATIONS}
+            className="min-[420px]:max-w-[calc(50%-0.375rem)]"
+          />
+          <p className="text-xs text-muted">How long you&apos;re usually at the property. Bookings block this much of your calendar.</p>
+        </div>
+      ) : null}
 
       <div className="space-y-1.5">
         <Label htmlFor={`${idBase}-description`}>Description</Label>

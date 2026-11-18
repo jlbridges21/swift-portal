@@ -22,11 +22,15 @@ export async function GET(request: Request) {
 
   const state = verifyOAuthState(url.searchParams.get("state") || "");
   const portalOrigin = state ? await getBusinessPortalOriginById(state.businessId) : "https://www.shootportal.app";
+  // The setup wizard (Booking & calendar step) asks to come back to /onboarding.
+  const businessBack = state && state.kind !== "member" && state.returnPath?.startsWith("/onboarding") ? state.returnPath : null;
   const fail = (reason: string) => {
     const dest = resolveGoogleCalendarReturnUrl({
       returnOrigin: state?.returnOrigin || portalOrigin,
       businessPortalOrigin: portalOrigin,
-      path: `/admin/settings?gcal=error&reason=${encodeURIComponent(reason)}#settings-integrations`,
+      path: businessBack
+        ? `${businessBack}?gcal=error`
+        : `/admin/settings?gcal=error&reason=${encodeURIComponent(reason)}#settings-integrations`,
     });
     return NextResponse.redirect(dest);
   };
@@ -70,7 +74,7 @@ export async function GET(request: Request) {
   const dest = resolveGoogleCalendarReturnUrl({
     returnOrigin: state.returnOrigin,
     businessPortalOrigin: portalOrigin,
-    path: "/admin/settings?gcal=connected#settings-integrations",
+    path: businessBack ? `${businessBack}?gcal=connected` : "/admin/settings?gcal=connected#settings-integrations",
   });
   return NextResponse.redirect(dest);
 }

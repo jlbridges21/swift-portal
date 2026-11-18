@@ -116,7 +116,7 @@ type OAuthState = {
   nonce: string;
   /** "member": a team member connecting their own calendar (Instant Booking). Default: business. */
   kind?: "business" | "member";
-  /** Member connects return here (an /admin path). */
+  /** Return here after connecting (an /admin path, or /onboarding for the setup wizard). */
   returnPath?: string;
 };
 
@@ -128,7 +128,7 @@ export function signOAuthState(payload: Omit<OAuthState, "exp" | "nonce"> & { ex
     exp: payload.exp ?? Date.now() + STATE_TTL_MS,
     nonce: randomBytes(16).toString("base64url"),
     ...(payload.kind === "member" ? { kind: "member" as const } : {}),
-    ...(payload.returnPath && /^\/admin(\/|\?|$)/.test(payload.returnPath) ? { returnPath: payload.returnPath } : {}),
+    ...(payload.returnPath && /^\/(admin|onboarding)(\/|\?|$)/.test(payload.returnPath) ? { returnPath: payload.returnPath } : {}),
   };
   const data = Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
   const sig = createHmac("sha256", stateSecret()).update(data).digest("base64url");
