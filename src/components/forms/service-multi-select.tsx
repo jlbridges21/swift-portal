@@ -83,6 +83,8 @@ export function ServiceMultiSelect({
   const [activeIndex, setActiveIndex] = useState(0);
   const [invalid, setInvalid] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number; width: number; maxHeight: number; above: boolean } | null>(null);
+  // Portal into the brand wrapper so dark-surface colors still apply (<body> is outside it).
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -176,6 +178,7 @@ export function ServiceMultiSelect({
     const width = Math.min(Math.max(rect.width, 256), window.innerWidth - margin * 2);
     const left = Math.min(Math.max(margin, rect.left), window.innerWidth - width - margin);
     setPosition({ top: above ? rect.top - gap : rect.bottom + gap, left, width, maxHeight, above });
+    setPortalTarget((field.closest("[data-surface]") as HTMLElement | null) ?? document.body);
   }, []);
 
   useLayoutEffect(() => {
@@ -475,7 +478,7 @@ export function ServiceMultiSelect({
                 </div>
               </div>
             </div>,
-            document.body
+            portalTarget ?? document.body
           )
         : null}
     </div>
