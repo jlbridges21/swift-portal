@@ -384,14 +384,15 @@ body::before {
    translucency or blur (iOS would show content and its own tint through it as a gray band). */
 @media (display-mode: standalone), (display-mode: fullscreen) {
   header.app-sticky-top {
-    background-color: var(--color-card);
+    /* A header can name its own solid color (the business website's themes do). */
+    background-color: var(--app-header-bg, var(--color-card));
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     box-shadow: none;
   }
 }
 html[data-standalone] header.app-sticky-top {
-  background-color: var(--color-card);
+  background-color: var(--app-header-bg, var(--color-card));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
