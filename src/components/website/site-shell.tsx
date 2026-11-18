@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import type { SitePageKey, SiteView } from "@/lib/website/view";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,8 @@ function SiteHeader({ view, theme, page, overlay }: { view: SiteView; theme: Sit
 
   return (
     <header
+      // Solid color the installed app / full-screen mode uses instead of the translucent bar.
+      style={{ "--app-header-bg": theme.dark ? "#0E0D0C" : "#ffffff" } as CSSProperties}
       className={cn(
         "z-40 w-full",
         overlay ? "absolute inset-x-0 top-0" : preview ? "relative" : "app-sticky-top sticky top-0",
