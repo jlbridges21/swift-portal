@@ -29,6 +29,7 @@ import {
   type ActivationPayload,
   type PortalAccessState,
 } from "@/lib/portal-activation";
+import { projectIdFromPortalPath } from "@/lib/client-access-link";
 
 type TenantDb = Awaited<ReturnType<typeof createTenantServiceClient>>;
 
@@ -198,8 +199,11 @@ export async function issueInviteActivationUrl(input: {
 }
 
 /**
- * Absolute CTA for a client email: the portal page for active clients, or a
- * one-step activation link (lands on the same page) for clients without one.
+ * Absolute CTA for a client email:
+ * - a project page for one of the client's own projects → a one-click link that
+ *   signs them in (no password) and opens that page (client-access-link.ts);
+ * - otherwise the portal page for active clients, or a one-step activation link
+ *   (lands on the same page) for clients without one.
  * Never throws — falls back to the plain portal URL.
  */
 export async function clientEmailCtaUrl(input: {
@@ -211,6 +215,22 @@ export async function clientEmailCtaUrl(input: {
   const origin = await getBusinessPortalOriginById(input.businessId);
   const plain = `${origin.replace(/\/$/, "")}${input.path.startsWith("/") ? input.path : `/${input.path}`}`;
   if (!input.clientId || !input.path.startsWith("/dashboard")) return plain;
+  try {
+    const pathProjectId = projectIdFromPortalPath(input.path);
+    if (pathProjectId && (!input.projectId || input.projectId.toLowerCase() === pathProjectId)) {
+      // Imported lazily: client-access-link-server imports this module.
+      const { issueClientAccessUrl } = await import("@/lib/client-access-link-server");
+      const issued = await issueClientAccessUrl({
+        businessId: input.businessId,
+        clientId: input.clientId,
+        projectId: pathProjectId,
+        path: input.path,
+      });
+      if (issued.ok) return issued.url;
+    }
+  } catch (err) {
+    console.warn("[portal-activation] one-click link unavailable:", err instanceof Error ? err.message : err);
+  }
   try {
     const db = await createTenantServiceClient(input.businessId);
     const client = await loadClient(db, input.clientId);

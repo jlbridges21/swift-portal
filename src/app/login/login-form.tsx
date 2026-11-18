@@ -62,10 +62,11 @@ export function LoginForm({
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => searchParams.get("email") || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"login" | "forgot" | "link_help" | "oauth_error">("login");
+  const [mode, setMode] = useState<"login" | "forgot" | "email_link" | "link_help" | "oauth_error">("login");
+  const [linkSent, setLinkSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [linkErrorKind, setLinkErrorKind] = useState<AuthLinkErrorKind>("generic");
   const [linkDescription, setLinkDescription] = useState<string | null>(null);
@@ -246,6 +247,32 @@ export function LoginForm({
     );
   }
 
+  /** Client portal: email a one-click link that opens their project (no password). */
+  async function handleEmailLink(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch("/api/auth/client-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request", email: email.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+      if (!res.ok) {
+        setError(data.error || "Couldn't send a link right now. Please try again.");
+        return;
+      }
+      setLinkSent(true);
+      setNotice(data.message || "If that email is on file with us, a sign-in link is on its way.");
+    } catch {
+      setError("Couldn't send a link right now. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (mode === "oauth_error") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -317,10 +344,12 @@ export function LoginForm({
       <main className={app ? "flex flex-1 items-start justify-center px-4 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))]" : "flex-1 flex items-center justify-center px-4 py-16"}>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle>{mode === "forgot" ? "Reset password" : "Sign in"}</CardTitle>
+            <CardTitle>{mode === "forgot" ? "Reset password" : mode === "email_link" ? "Email me a sign-in link" : "Sign in"}</CardTitle>
             <CardDescription>
               {mode === "forgot"
                 ? "We’ll email a link that opens on this portal so you stay on the right business."
+                : mode === "email_link"
+                  ? "Enter the email you gave us. We’ll send a link that opens your project — no password needed."
                 : app
                   ? "Sign in to your account"
                   : "Access your ShootPortal admin or client portal"}
@@ -379,6 +408,60 @@ export function LoginForm({
                     }}
                   >
                     Forgot password?
+                  </button>
+                </p>
+                {showRequestLink && (
+                  <div className="rounded-lg border border-border bg-accent-subtle/40 p-3 text-center text-sm">
+                    <p className="text-muted">Getting photos or videos from us?</p>
+                    <button
+                      type="button"
+                      className="mt-1 font-medium text-accent hover:underline"
+                      onClick={() => {
+                        setMode("email_link");
+                        setError("");
+                        setNotice("");
+                        setLinkSent(false);
+                      }}
+                    >
+                      Email me a sign-in link instead
+                    </button>
+                  </div>
+                )}
+              </form>
+            ) : mode === "email_link" ? (
+              <form onSubmit={handleEmailLink} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="link-email">Email</Label>
+                  <Input
+                    id="link-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                {notice && (
+                  <p className="text-sm text-muted" role="status">
+                    {notice}
+                  </p>
+                )}
+                <Button type="submit" variant="accent" className="w-full min-h-11" disabled={loading || linkSent}>
+                  {loading ? "Sending…" : linkSent ? "Link sent — check your email" : "Email me a link"}
+                </Button>
+                <p className="text-center text-sm">
+                  <button
+                    type="button"
+                    className="text-accent hover:underline"
+                    onClick={() => {
+                      setMode("login");
+                      setError("");
+                      setNotice("");
+                    }}
+                  >
+                    Sign in with a password instead
                   </button>
                 </p>
               </form>

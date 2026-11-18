@@ -33,6 +33,7 @@ import {
   Pencil,
   Phone,
   Play,
+  Send,
   Share2,
   Trash2,
   UserRound,
@@ -119,7 +120,8 @@ export function StatusPill({
 }
 
 /**
- * Project page toolbar: Status · Share · Client Preview · More, on one row at every width.
+ * Project page toolbar: Status · Send to client · Share · Client Preview · More, on one row at
+ * every width. Send to client is the primary action; Share (other people, link access) is secondary.
  * Phones: Status flexes and truncates, Client Preview shortens to "Preview" (icon-only under
  * 375px, still labelled for assistive tech), More stays an icon. Desktop is unchanged.
  */
@@ -128,6 +130,7 @@ export function ProjectActionBar({
   statusSaving,
   onStatusChange,
   onShare,
+  onDeliver,
   previewUrl,
   onMore,
 }: {
@@ -135,6 +138,8 @@ export function ProjectActionBar({
   statusSaving: boolean;
   onStatusChange: (status: string) => void;
   onShare: () => void;
+  /** Email the project's client a one-click link (view, pay, download). */
+  onDeliver?: () => void;
   previewUrl: string;
   onMore: (trigger: HTMLElement) => void;
 }) {
@@ -146,9 +151,27 @@ export function ProjectActionBar({
         onChange={onStatusChange}
         className="h-10 min-w-0 flex-1 pl-2.5 pr-6 sm:h-9 sm:flex-none sm:pl-3 sm:pr-8"
       />
-      <Button variant="accent" className="h-10 shrink-0 gap-1.5 px-2.5 sm:h-9 sm:gap-2 sm:px-4" onClick={onShare}>
-        <Share2 className="h-4 w-4" /> Share
-      </Button>
+      {onDeliver ? (
+        <>
+          <Button variant="accent" className="h-10 shrink-0 gap-1.5 px-2.5 sm:h-9 sm:gap-2 sm:px-4" onClick={onDeliver}>
+            <Send className="h-4 w-4" /> <span className="hidden min-[400px]:inline">Send to client</span>
+            <span className="min-[400px]:hidden">Send</span>
+          </Button>
+          <Button
+            variant="outline"
+            aria-label="Share"
+            title="Share with others"
+            className="h-10 w-10 shrink-0 gap-1.5 px-0 sm:h-9 sm:w-auto sm:gap-2 sm:px-4"
+            onClick={onShare}
+          >
+            <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Share</span>
+          </Button>
+        </>
+      ) : (
+        <Button variant="accent" className="h-10 shrink-0 gap-1.5 px-2.5 sm:h-9 sm:gap-2 sm:px-4" onClick={onShare}>
+          <Share2 className="h-4 w-4" /> Share
+        </Button>
+      )}
       <a
         href={previewUrl}
         target="_blank"
@@ -157,11 +180,13 @@ export function ProjectActionBar({
         title="Client Preview"
         className={cn(
           buttonVariants({ variant: "outline" }),
-          "h-10 w-10 shrink-0 gap-1.5 px-0 min-[375px]:w-auto min-[375px]:px-3 sm:h-9 sm:gap-2 sm:px-4"
+          "h-10 w-10 shrink-0 gap-1.5 px-0 sm:h-9 sm:w-auto sm:gap-2 sm:px-4",
+          !onDeliver && "min-[375px]:w-auto min-[375px]:px-3"
         )}
       >
         <ExternalLink className="h-4 w-4" />
-        <span className="hidden min-[375px]:inline sm:hidden">Preview</span>
+        {/* With Send to client on the bar, phones keep Preview icon-only so Status stays readable. */}
+        <span className={cn("hidden sm:hidden", !onDeliver && "min-[375px]:inline")}>Preview</span>
         <span className="hidden sm:inline">Client Preview</span>
       </a>
       <Button

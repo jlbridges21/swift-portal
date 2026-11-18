@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ProjectPageClientProps } from "@/components/projects/project-page-client";
-import { PaymentOptionsProvider } from "@/components/projects/payments-section";
+import { PaymentOptionsProvider, ShowMediaAfterPaymentProvider } from "@/components/projects/payments-section";
 import { useLiveFinancials } from "@/components/projects/use-live-financials";
 import { useClientFavorites } from "@/components/projects/use-client-favorites";
 import { useProjectZipDownload } from "@/components/projects/project-zip-download";
@@ -368,10 +368,17 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     tourEmbedUrls,
   };
 
+  // After a payment unlocks downloads, "Download media" opens the gallery, where Download All waits.
+  const showMediaAfterPayment = useCallback(() => {
+    goTo("gallery");
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+  }, [goTo]);
+
   const pageTitle = project.property_address?.trim() || project.project_name;
 
   return (
     <PaymentOptionsProvider value={paymentOptions}>
+      <ShowMediaAfterPaymentProvider value={showMediaAfterPayment}>
       <div className="min-h-screen bg-slate-50 surface-dark:bg-background">
         <HashScrollHandler />
         {isPreview ? (
@@ -456,6 +463,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
           }}
         />
       </div>
+      </ShowMediaAfterPaymentProvider>
     </PaymentOptionsProvider>
   );
 }

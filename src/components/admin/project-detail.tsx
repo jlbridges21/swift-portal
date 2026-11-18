@@ -61,6 +61,7 @@ import {
   History,
   Copy,
   Activity as ActivityIcon,
+  Send,
 } from "lucide-react";
 import { useInAdminAppShell } from "@/components/admin/app-shell/admin-app-shell-context";
 import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
@@ -105,6 +106,7 @@ import type { KitSummary } from "@/lib/marketing/server";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 import type { ProjectShareRow } from "@/lib/project-shares";
 import { ProjectShareModal } from "@/components/admin/project-share-modal";
+import { DeliverToClientDialog } from "@/components/admin/deliver-to-client-dialog";
 import type { ProjectLinkAccessMode } from "@/lib/project-link-access";
 import type { PhotoShareSummary } from "@/lib/media-share-types";
 import { usePhotoShareDialog, useProjectPhotoShareSummary } from "@/components/photos/photo-share-dialog";
@@ -401,6 +403,7 @@ export function AdminProjectDetail({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPermanentDelete, setShowPermanentDelete] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showDeliverDialog, setShowDeliverDialog] = useState(false);
   const [folders, setFolders] = useState(initialFolders);
   const [tourPendingDelete, setTourPendingDelete] = useState<Tour | null>(null);
   const [deletingTour, setDeletingTour] = useState(false);
@@ -1745,6 +1748,20 @@ export function AdminProjectDetail({
 
   const sharedDialogs = (
     <>
+      <DeliverToClientDialog
+        open={showDeliverDialog}
+        onClose={() => setShowDeliverDialog(false)}
+        projectId={initialProject.id}
+        previewUrl={portalUrl}
+        onSent={(summary) => {
+          // "Mark as Delivered" may have moved the status; keep the page in step.
+          if (summary.status !== normalizeStatus(form.status)) {
+            setForm((f) => ({ ...f, status: summary.status as typeof f.status }));
+          }
+          router.refresh();
+        }}
+      />
+
       <ProjectShareModal
         open={showShareModal}
         onClose={() => setShowShareModal(false)}
@@ -2216,6 +2233,7 @@ export function AdminProjectDetail({
           statusSaving={statusSaving}
           onStatusChange={(next) => void changeStatus(next)}
           onShare={() => setShowShareModal(true)}
+          onDeliver={() => setShowDeliverDialog(true)}
           previewUrl={portalUrl}
           onMore={(element) => setProjectMenuAnchor({ kind: "element", element })}
         />
@@ -2831,6 +2849,14 @@ export function AdminProjectDetail({
             <StatusBadge status={form.status} />
             <Button
               variant="accent"
+              size="sm"
+              className="min-h-10"
+              onClick={() => setShowDeliverDialog(true)}
+            >
+              <Send className="h-4 w-4" /> Send to client
+            </Button>
+            <Button
+              variant="outline"
               size="sm"
               className="min-h-10"
               onClick={() => setShowShareModal(true)}

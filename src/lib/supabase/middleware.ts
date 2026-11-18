@@ -417,6 +417,7 @@ export async function updateSession(request: NextRequest) {
       path.startsWith("/auth/handoff") ||
       path.startsWith("/auth/oauth") ||
       path.startsWith("/auth/share") ||
+      path.startsWith("/auth/client") ||
       isPhotoSharePath ||
       path.startsWith("/api/auth/") ||
       path.startsWith("/_next") ||

@@ -123,19 +123,34 @@ function checkoutStatusUrl(paymentId: string) {
     `${paymentCheckoutPath(paymentId)}/status${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`;
 }
 
+/**
+ * Where "Download media" (after a payment unlocks downloads) takes the client. The tabbed client
+ * portal sets this to open its gallery; without it the classic page scrolls to #photo-gallery.
+ */
+const ShowMediaAfterPaymentContext = createContext<(() => void) | null>(null);
+
+export function ShowMediaAfterPaymentProvider({ value, children }: { value: () => void; children: ReactNode }) {
+  return <ShowMediaAfterPaymentContext.Provider value={value}>{children}</ShowMediaAfterPaymentContext.Provider>;
+}
+
 /** After paying: refresh server data (payment status, unlocked downloads), optionally jump to media. */
 function useAfterPayment() {
   const router = useRouter();
+  const showMedia = useContext(ShowMediaAfterPaymentContext);
   return useCallback(
     (scrollToMedia = false) => {
       router.refresh();
+      if (scrollToMedia && showMedia) {
+        showMedia();
+        return;
+      }
       if (scrollToMedia) {
         window.setTimeout(() => {
           document.getElementById("photo-gallery")?.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 400);
       }
     },
-    [router]
+    [router, showMedia]
   );
 }
 
