@@ -35,7 +35,9 @@ function projectLesson(tab: string | null): PageLessons {
     case "details":
       return { primary: "V08", related: ["V16"] };
     default:
-      return { primary: "V10", related: ["V11", "V07"] };
+      // Media is the default tab: the project page's own lesson (upload → share → paid →
+      // Download All). Uploading/organizing media stays one click away under "related".
+      return { primary: "V20", related: ["V10", "V11", "V09"] };
   }
 }
 

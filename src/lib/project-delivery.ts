@@ -294,7 +294,9 @@ export async function deliverProjectToClient(input: {
     summary = (await loadDeliverySummary(input.businessId, input.projectId)) ?? summary;
   }
 
-  const ctaPath = `${projectPortalBasePath(input.projectId)}${summary.dueCents > 0 && !summary.downloadsUnlocked ? "?tab=pay#payments" : ""}`;
+  // Land on the gallery: the client sees their media first, with "Pay $X to download" (or
+  // "Download All") as the top button.
+  const ctaPath = projectPortalBasePath(input.projectId);
   const issued = await issueClientAccessUrl({
     businessId: input.businessId,
     clientId: client.id,
