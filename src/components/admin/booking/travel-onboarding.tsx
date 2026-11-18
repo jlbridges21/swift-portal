@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Car, Loader2, MapPin } from "lucide-react";
 import type { AppSettings } from "@/lib/app-settings";
-import type { TravelFeeModel } from "@/lib/booking/settings";
+import { travelTiersError, type BookingSettings, type TravelFeeModel } from "@/lib/booking/settings";
 import { travelPricingExample } from "@/lib/booking/travel-pricing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
-import { cn } from "@/lib/utils";
+import { MaxTravelFeeField, PerMileFields, TierFields } from "@/components/admin/booking/travel-fee-fields";
+import { cn, formatCurrency } from "@/lib/utils";
 
 type AddressDraft = { addressLine1: string; city: string; state: string; postalCode: string; country: string };
 
@@ -28,7 +29,8 @@ async function patchSettings(settings: Partial<AppSettings> | Record<string, unk
 
 /**
  * Onboarding → Services: pick a travel fee model (Google Routes driving distance).
- * Saves immediately; details are refined later in Settings → Services → Travel fees.
+ * Saves immediately. Per-mile and distance-tier details are edited right here (same editors as
+ * Settings → Services → Travel fees) and save a moment after the last change.
  * Travel is measured from the business address, so without one this asks for it in a dialog
  * right here (no trip back to the first step), then applies the fee type they picked.
  */
@@ -39,6 +41,45 @@ export function TravelFeesOnboarding({ onAddressSaved }: { onAddressSaved?: () =
   const [addressOpen, setAddressOpen] = useState(false);
   /** Fee type chosen before an address existed: applied once the address is saved. */
   const [pendingModel, setPendingModel] = useState<TravelFeeModel | null>(null);
+  /** Booking settings waiting to be saved after a detail edit (debounced). */
+  const pendingSave = useRef<AppSettings["booking"] | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushSave = useCallback(async () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const booking = pendingSave.current;
+    pendingSave.current = null;
+    if (!booking) return;
+    setSaving(true);
+    setError(null);
+    try {
+      // Keep the local draft (the user may still be typing); the server copy is the same values.
+      await patchSettings({ booking });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save travel fees.");
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  // Leaving the step (Continue / Back) saves any edit still waiting.
+  useEffect(() => () => void flushSave(), [flushSave]);
+
+  function editTravel(patch: Partial<BookingSettings["travel"]>) {
+    if (!settings) return;
+    const travel = { ...settings.booking.travel, ...patch };
+    const booking = { ...settings.booking, travel };
+    setSettings({ ...settings, booking });
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    // Tiers with a gap or overlap aren't saved until they're fixed (the error shows under them).
+    if (travel.model === "tiers" && travelTiersError(travel.tiers)) {
+      pendingSave.current = null;
+      return;
+    }
+    pendingSave.current = booking;
+    saveTimer.current = setTimeout(() => void flushSave(), 700);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +96,8 @@ export function TravelFeesOnboarding({ onAddressSaved }: { onAddressSaved?: () =
   }, []);
 
   async function applyModel(base: AppSettings, model: TravelFeeModel) {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    pendingSave.current = null;
     const booking = { ...base.booking, travel: { ...base.booking.travel, model } };
     setSettings({ ...base, booking });
     setSaving(true);
@@ -101,8 +144,8 @@ export function TravelFeesOnboarding({ onAddressSaved }: { onAddressSaved?: () =
         {(
           [
             ["none", "No fee", "Never add travel."],
-            ["per_mile", "Per mile", "$0.75/mi after 15 miles."],
-            ["tiers", "Distance tiers", "$0 · $25 · $50 by distance."],
+            ["per_mile", "Per mile", `${formatCurrency(travel.perMileCents)}/mi after ${travel.freeMiles} miles.`],
+            ["tiers", "Distance tiers", "A flat fee for each distance range."],
           ] as const
         ).map(([value, title, desc]) => (
           <button
@@ -136,7 +179,24 @@ export function TravelFeesOnboarding({ onAddressSaved }: { onAddressSaved?: () =
           </button>
         </p>
       ) : (
-        <p className="mt-2 text-xs text-muted">{travelPricingExample(travel)} Fine-tune it anytime in Settings → Services.</p>
+        <>
+          {travel.model === "per_mile" || travel.model === "tiers" ? (
+            <div className="mt-3 space-y-4 rounded-xl border border-border p-3">
+              {travel.model === "per_mile" ? (
+                <PerMileFields travel={travel} onChange={editTravel} idPrefix="ob-travel" />
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted">Set where each range ends and its fee. The last range covers everything farther.</p>
+                  <TierFields travel={travel} onChange={editTravel} />
+                </div>
+              )}
+              <div className="sm:max-w-[calc(50%-0.375rem)]">
+                <MaxTravelFeeField travel={travel} onChange={editTravel} idPrefix="ob-travel" />
+              </div>
+            </div>
+          ) : null}
+          <p className="mt-2 text-xs text-muted">{travelPricingExample(travel)} You can change this anytime in Settings → Services.</p>
+        </>
       )}
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 
