@@ -949,24 +949,29 @@ function Popover({ anchor, onClose, label, children }: { anchor: HTMLElement; on
   const target = (anchor.closest("[data-surface]") as HTMLElement | null) ?? document.body;
   return createPortal(
     <>
-      {sheet ? <div className="fixed inset-0 z-[80] bg-black/30" aria-hidden /> : null}
+      {/* Phone sheet sits above the installed-app tab bar (z-100), below full modals (z-120+). */}
+      {sheet ? <div className="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-[2px]" aria-hidden /> : null}
       <div
         ref={ref}
         role="dialog"
         aria-label={label}
         className={cn(
-          "fixed z-[81] border border-border bg-card p-4 shadow-[0_16px_48px_-12px_rgba(15,23,42,0.35)]",
+          "fixed border border-border bg-card shadow-[0_16px_48px_-12px_rgba(15,23,42,0.35)]",
           sheet
-            ? "inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))]"
-            : "w-80 rounded-2xl"
+            ? "phone-sheet-max-h phone-sheet-bottom-pad inset-x-0 bottom-0 z-[111] overflow-y-auto overscroll-contain rounded-t-2xl px-4 pt-2"
+            : "z-[81] w-80 rounded-2xl p-4"
         )}
         style={sheet ? undefined : pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }}
       >
+        {sheet ? <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden /> : null}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-subtle hover:text-heading"
+          className={cn(
+            "absolute right-2 flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-subtle hover:text-heading",
+            sheet ? "top-4" : "top-2"
+          )}
         >
           <X className="h-4 w-4" aria-hidden />
         </button>
