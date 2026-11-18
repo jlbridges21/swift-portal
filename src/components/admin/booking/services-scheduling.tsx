@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarClock, Car, Check, Layers, Loader2, Plus, Route, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { CalendarClock, Car, Check, Layers, Loader2, Route } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useSettingsTab } from "@/components/admin/settings-tabs/shared";
 import { BookingCard, FieldLabel, MinutesSelect, Notice } from "@/components/admin/booking/booking-ui";
 import { useBookingOverview, type OverviewService } from "@/components/admin/booking/use-booking-overview";
-import { combinedDuration, formatDuration, travelTiersError, type BookingSettings, type TravelFeeTier } from "@/lib/booking/settings";
+import { combinedDuration, formatDuration, type BookingSettings } from "@/lib/booking/settings";
 import { travelPricingExample } from "@/lib/booking/travel-pricing";
+import { MaxTravelFeeField, PerMileFields, TierFields } from "@/components/admin/booking/travel-fee-fields";
 import { cn, formatCurrency } from "@/lib/utils";
 
 const DURATIONS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240];
@@ -243,32 +244,8 @@ export function RoutesTravelFeesCard() {
   const travel = settings.booking.travel;
   const patchTravel = (p: Partial<BookingSettings["travel"]>) =>
     setSettings((prev) => ({ ...prev, booking: { ...prev.booking, travel: { ...prev.booking.travel, ...p } } }));
-  const tierError = travel.model === "tiers" ? travelTiersError(travel.tiers) : null;
   // Legacy ZIP travel settings stay in storage for old data but are no longer used.
   void travelDirty;
-
-  function setTier(i: number, patch: Partial<TravelFeeTier>) {
-    const tiers = travel.tiers.map((t, idx) => (idx === i ? { ...t, ...patch } : t));
-    // Keep tiers connected: a tier's end is the next one's start.
-    for (let k = 1; k < tiers.length; k++) if (tiers[k - 1].toMiles !== null) tiers[k] = { ...tiers[k], fromMiles: tiers[k - 1].toMiles as number };
-    patchTravel({ tiers });
-  }
-  function addTier() {
-    const tiers = [...travel.tiers];
-    const last = tiers[tiers.length - 1];
-    const start = last ? last.fromMiles + 15 : 0;
-    if (last) tiers[tiers.length - 1] = { ...last, toMiles: start };
-    tiers.push({ fromMiles: start, toMiles: null, feeCents: (last?.feeCents ?? 0) + 2500 });
-    patchTravel({ tiers });
-  }
-  function removeTier(i: number) {
-    if (travel.tiers.length <= 1) return;
-    const tiers = travel.tiers.filter((_, idx) => idx !== i);
-    tiers[0] = { ...tiers[0], fromMiles: 0 };
-    tiers[tiers.length - 1] = { ...tiers[tiers.length - 1], toMiles: null };
-    for (let k = 1; k < tiers.length; k++) tiers[k] = { ...tiers[k], fromMiles: tiers[k - 1].toMiles ?? tiers[k].fromMiles };
-    patchTravel({ tiers });
-  }
 
   return (
     <BookingCard icon={Car} title="Travel fees" description="How travel is charged for properties away from your business address." id="settings-travel-fees">
@@ -295,65 +272,13 @@ export function RoutesTravelFeesCard() {
                 </span>
               </label>
               {travel.model === "per_mile" && value === "per_mile" ? (
-                <div className="grid gap-3 border-t border-border p-3 sm:grid-cols-3">
-                  <div>
-                    <FieldLabel htmlFor="per-mile-rate">Rate per mile</FieldLabel>
-                    <MoneyInput id="per-mile-rate" cents={travel.perMileCents} onChange={(c) => patchTravel({ perMileCents: c })} />
-                  </div>
-                  <div>
-                    <FieldLabel htmlFor="per-mile-free" hint="One-way miles included before charging.">
-                      Free miles
-                    </FieldLabel>
-                    <input
-                      id="per-mile-free"
-                      type="number"
-                      min={0}
-                      value={travel.freeMiles}
-                      onChange={(e) => patchTravel({ freeMiles: Math.max(0, Number(e.target.value) || 0) })}
-                      className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                    />
-                  </div>
-                  <label className="flex items-end gap-2 pb-2 text-sm">
-                    <Switch aria-label="Charge round trip" checked={travel.roundTrip} onCheckedChange={(v) => patchTravel({ roundTrip: v })} />
-                    Charge round trip
-                  </label>
+                <div className="border-t border-border p-3">
+                  <PerMileFields travel={travel} onChange={patchTravel} />
                 </div>
               ) : null}
               {travel.model === "tiers" && value === "tiers" ? (
-                <div className="space-y-2 border-t border-border p-3">
-                  {travel.tiers.map((t, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="w-28 text-muted">
-                        {t.fromMiles}
-                        {t.toMiles === null ? "+ miles" : " –"}
-                      </span>
-                      {t.toMiles !== null ? (
-                        <input
-                          aria-label={`Tier ${i + 1} ends at miles`}
-                          type="number"
-                          min={t.fromMiles + 1}
-                          value={t.toMiles}
-                          onChange={(e) => setTier(i, { toMiles: Math.max(t.fromMiles + 1, Number(e.target.value) || 0) })}
-                          className="h-10 w-20 rounded-lg border border-border bg-card px-2 text-sm"
-                        />
-                      ) : null}
-                      {t.toMiles !== null ? <span className="text-muted">miles</span> : null}
-                      <MoneyInput className="w-32" ariaLabel={`Tier ${i + 1} fee`} cents={t.feeCents} onChange={(c) => setTier(i, { feeCents: c })} />
-                      <button
-                        type="button"
-                        aria-label={`Remove tier ${i + 1}`}
-                        disabled={travel.tiers.length <= 1}
-                        onClick={() => removeTier(i)}
-                        className="rounded-md p-2 text-muted hover:text-red-600 disabled:opacity-30"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addTier} className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent-subtle">
-                    <Plus className="h-3.5 w-3.5" /> Add tier
-                  </button>
-                  {tierError ? <p className="text-xs text-red-600">{tierError}</p> : null}
+                <div className="border-t border-border p-3">
+                  <TierFields travel={travel} onChange={patchTravel} />
                 </div>
               ) : null}
             </div>
@@ -361,12 +286,7 @@ export function RoutesTravelFeesCard() {
         </div>
         {travel.model !== "none" ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <FieldLabel htmlFor="travel-cap" hint="Above this, no fee is added automatically and you quote travel yourself.">
-                Maximum travel fee
-              </FieldLabel>
-              <MoneyInput id="travel-cap" cents={travel.maxFeeCents} onChange={(c) => patchTravel({ maxFeeCents: c })} placeholder="No maximum" />
-            </div>
+            <MaxTravelFeeField travel={travel} onChange={patchTravel} />
             <p className="flex items-end gap-1.5 pb-2 text-xs text-muted">
               <Route className="h-3.5 w-3.5 shrink-0" aria-hidden /> {travelPricingExample(travel)}
             </p>
@@ -374,45 +294,5 @@ export function RoutesTravelFeesCard() {
         ) : null}
       </div>
     </BookingCard>
-  );
-}
-
-function MoneyInput({
-  cents,
-  onChange,
-  id,
-  className,
-  ariaLabel,
-  placeholder,
-}: {
-  cents: number;
-  onChange: (cents: number) => void;
-  id?: string;
-  className?: string;
-  ariaLabel?: string;
-  placeholder?: string;
-}) {
-  const [text, setText] = useState(cents ? (cents / 100).toFixed(2) : "");
-  useEffect(() => {
-    setText((prev) => (Math.round(Number(prev || 0) * 100) === cents ? prev : cents ? (cents / 100).toFixed(2) : ""));
-  }, [cents]);
-  return (
-    <div className={cn("relative", className)}>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">$</span>
-      <input
-        id={id}
-        aria-label={ariaLabel}
-        inputMode="decimal"
-        placeholder={placeholder ?? "0.00"}
-        value={text}
-        onChange={(e) => {
-          const v = e.target.value.replace(/[^\d.]/g, "");
-          setText(v);
-          const n = Number(v);
-          if (Number.isFinite(n)) onChange(Math.max(0, Math.round(n * 100)));
-        }}
-        className="h-10 w-full rounded-lg border border-border bg-card pl-7 pr-3 text-sm"
-      />
-    </div>
   );
 }
