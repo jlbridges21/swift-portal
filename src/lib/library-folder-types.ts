@@ -17,6 +17,11 @@ export type LibraryItemRef = { kind: LibraryAssetKind; id: string };
 export type LibraryFolderSummary = {
   id: string;
   name: string;
+  /** v136: the folder this one sits in (null = top level). */
+  parentId: string | null;
+  /** Direct subfolders. */
+  subfolderCount: number;
+  /** Items directly in this folder (not counting subfolders). */
   itemCount: number;
   /**
    * Image shown on the card: the manual cover (a photo, or a video's stored poster), else the
@@ -104,4 +109,49 @@ export function libraryItemColumn(kind: LibraryAssetKind): "media_asset_id" | "t
 
 export function folderItemCountLabel(n: number): string {
   return `${n.toLocaleString()} item${n === 1 ? "" : "s"}`;
+}
+
+/** "3 folders · 64 items" — subfolders first, only when there are any. */
+export function folderContentsLabel(f: Pick<LibraryFolderSummary, "itemCount" | "subfolderCount">): string {
+  const items = folderItemCountLabel(f.itemCount);
+  if (!f.subfolderCount) return items;
+  return `${f.subfolderCount.toLocaleString()} folder${f.subfolderCount === 1 ? "" : "s"} · ${items}`;
+}
+
+/** Ancestors from the top level down to (and including) `id`, from a loaded folder list. */
+export function libraryFolderTrail<T extends { id: string; parentId: string | null }>(folders: T[], id: string): T[] {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const trail: T[] = [];
+  const seen = new Set<string>();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    trail.unshift(cur);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return trail;
+}
+
+/** "Clients / Smith / Raw" — for pickers that list every folder. */
+export function libraryFolderPathName<T extends { id: string; name: string; parentId: string | null }>(folders: T[], id: string): string {
+  return libraryFolderTrail(folders, id).map((f) => f.name).join(" / ");
+}
+
+/** The folder and every folder beneath it, from a loaded folder list. */
+export function libraryFolderDescendants<T extends { id: string; parentId: string | null }>(folders: T[], id: string): T[] {
+  const out: T[] = [];
+  const seen = new Set<string>([id]);
+  let frontier = [id];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const f of folders) {
+      if (f.parentId && frontier.includes(f.parentId) && !seen.has(f.id)) {
+        seen.add(f.id);
+        out.push(f);
+        next.push(f.id);
+      }
+    }
+    frontier = next;
+  }
+  return out;
 }

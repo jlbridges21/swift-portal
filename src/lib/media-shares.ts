@@ -52,6 +52,9 @@ const SHARE_COLUMNS =
   "id, business_id, media_asset_id, media_folder_id, project_id, folder_id, kind, email, allow_download, access_mode, access_starts_at, access_expires_at, expiry_preset, created_at, notified_at, last_accessed_at, view_count, revoked_at, token_ciphertext";
 /** v126 subjects. Selected separately so photo/folder shares keep working before the migration. */
 const V126_SHARE_COLUMNS = `${SHARE_COLUMNS}, library_folder_id, tour_id, model_id`;
+/** v135: "Can upload" on library-folder shares. Read with a fallback so folders keep working before it. */
+const V135_SHARE_COLUMNS = `${V126_SHARE_COLUMNS}, allow_upload`;
+const UPLOAD_SETUP_MESSAGE = "Upload access isn't set up yet. Run migration v135.";
 
 type MediaShareRow = {
   id: string;
@@ -76,6 +79,7 @@ type MediaShareRow = {
   library_folder_id?: string | null;
   tour_id?: string | null;
   model_id?: string | null;
+  allow_upload?: boolean;
 };
 
 export type ShareablePhoto = {
@@ -402,18 +406,50 @@ function isLive(row: Pick<MediaShareRow, "revoked_at" | "access_mode" | "access_
   return validateShareAccessWindow({ ...row, one_time_used_at: null }).ok;
 }
 
-async function activeSharesFor(subject: ShareSubject): Promise<MediaShareRow[]> {
+async function activeSharesWithMeta(subject: ShareSubject): Promise<{ rows: MediaShareRow[]; uploadColumns: boolean }> {
   const db = await createTenantServiceClient(subjectBusinessId(subject));
-  const { data, error } = await db
-    .from("media_shares")
-    .select(subjectShareColumns(subject))
-    .eq(subjectColumn(subject), subjectId(subject))
-    .is("revoked_at", null)
-    .order("created_at", { ascending: true });
+  const query = (columns: string) =>
+    db
+      .from("media_shares")
+      .select(columns)
+      .eq(subjectColumn(subject), subjectId(subject))
+      .is("revoked_at", null)
+      .order("created_at", { ascending: true });
+  if (subject.kind === "library_folder") {
+    const upload = await query(V135_SHARE_COLUMNS);
+    if (!upload.error) return { rows: (upload.data as unknown as MediaShareRow[] | null) ?? [], uploadColumns: true };
+  }
+  const { data, error } = await query(subjectShareColumns(subject));
   if (error && subject.kind !== "photo" && subject.kind !== "folder") {
     throw new MediaShareError("Sharing for this item isn't set up yet. Run migration v126.", 503);
   }
-  return (data as unknown as MediaShareRow[] | null) ?? [];
+  return { rows: (data as unknown as MediaShareRow[] | null) ?? [], uploadColumns: false };
+}
+
+async function activeSharesFor(subject: ShareSubject): Promise<MediaShareRow[]> {
+  return (await activeSharesWithMeta(subject)).rows;
+}
+
+/** Upload access is only for library folders; it always carries downloads with it. */
+function accessFields(
+  subject: ShareSubject,
+  allowDownload: boolean,
+  allowUpload: boolean | undefined,
+  /** The row was read with allow_upload, so the column exists and may be cleared. */
+  uploadColumn = false
+) {
+  if (allowUpload && subject.kind !== "library_folder") {
+    throw new MediaShareError("Only Media Library folders can receive uploads.", 400);
+  }
+  const fields: Record<string, boolean> = { allow_download: allowDownload || Boolean(allowUpload) };
+  // Omit the column unless needed so shares keep working before migration v135.
+  if (allowUpload) fields.allow_upload = true;
+  else if (uploadColumn) fields.allow_upload = false;
+  return fields;
+}
+
+function isMissingUploadColumn(error: { message?: string; code?: string } | null): boolean {
+  return Boolean(error && (error.code === "42703" || error.code === "PGRST204" || /allow_upload/.test(error.message ?? "")));
 }
 
 type ShareAction =
@@ -460,7 +496,8 @@ async function logShareEvent(
 
 export async function getMediaShareState(subject: ShareSubject): Promise<MediaShareState> {
   const businessId = subjectBusinessId(subject);
-  const rows = (await activeSharesFor(subject)).filter(isLive);
+  const meta = await activeSharesWithMeta(subject);
+  const rows = meta.rows.filter(isLive);
   const linkRow = rows.find((r) => r.kind === "link") ?? null;
   let link: MediaLinkShareView | null = null;
   if (linkRow) {
@@ -468,6 +505,7 @@ export async function getMediaShareState(subject: ShareSubject): Promise<MediaSh
     link = {
       id: linkRow.id,
       allow_download: linkRow.allow_download,
+      allow_upload: linkRow.allow_upload === true,
       expiry_preset: linkRow.expiry_preset,
       access_expires_at: linkRow.access_expires_at,
       created_at: linkRow.created_at,
@@ -482,6 +520,7 @@ export async function getMediaShareState(subject: ShareSubject): Promise<MediaSh
       id: r.id,
       email: r.email as string,
       allow_download: r.allow_download,
+      allow_upload: r.allow_upload === true,
       expiry_preset: r.expiry_preset,
       access_expires_at: r.access_expires_at,
       created_at: r.created_at,
@@ -489,7 +528,7 @@ export async function getMediaShareState(subject: ShareSubject): Promise<MediaSh
       view_count: r.view_count,
       notified_at: r.notified_at,
     }));
-  return { link, people };
+  return { link, people, uploadAvailable: subject.kind === "library_folder" && meta.uploadColumns };
 }
 
 async function projectShareSummary(
@@ -533,18 +572,23 @@ export async function getProjectFolderShareSummary(
 
 // ── People (email) ─────────────────────────────────────────────────────────
 
-async function sendShareEmail(subject: ShareSubject, email: string, rawToken: string) {
+async function sendShareEmail(subject: ShareSubject, email: string, rawToken: string, canUpload = false) {
   const businessId = subjectBusinessId(subject);
   const settings = await getAppSettings(businessId);
   const businessName = settings.business.businessName.trim() || "Your photographer";
   const url = await buildMediaShareUrl(businessId, rawToken, subject.kind);
   if (subject.kind === "library_folder") {
+    const uploadNote = canUpload
+      ? " You can add your own photos and videos to it — just open the folder and drag them in. No account needed."
+      : "";
     return sendBrandedEmail({
       businessId,
       to: email,
-      subject: `${businessName} shared a folder with you`,
-      title: "A folder was shared with you",
-      body: `${businessName} shared the folder “${subject.libraryFolder.name}” with you. This link was sent only to you — please don't forward it.`,
+      subject: canUpload
+        ? `${businessName} invited you to upload to a folder`
+        : `${businessName} shared a folder with you`,
+      title: canUpload ? "You're invited to upload to a folder" : "A folder was shared with you",
+      body: `${businessName} shared the folder “${subject.libraryFolder.name}” with you.${uploadNote} This link was sent only to you — please don't forward it.`,
       ctaLabel: "Open folder",
       ctaUrl: url,
       emailType: "folder_share_invite",
@@ -602,10 +646,12 @@ export async function createEmailShare(input: {
   subject: ShareSubject;
   email: string;
   allowDownload: boolean;
+  allowUpload?: boolean;
   expiryPreset: MediaShareExpiryPreset;
   actorId: string | null;
   notify: boolean;
 }): Promise<CreateEmailShareResult> {
+  const access = accessFields(input.subject, input.allowDownload, input.allowUpload);
   const email = normalizeShareEmail(input.email);
   if (!isValidShareEmail(email)) {
     return { result: { email, status: "invalid", error: "Not a valid email address." }, rawToken: null };
@@ -631,7 +677,7 @@ export async function createEmailShare(input: {
       kind: "email",
       email,
       access_token_hash: hashShareAccessToken(rawToken),
-      allow_download: input.allowDownload,
+      ...access,
       created_by: input.actorId,
       ...windowFor(input.expiryPreset),
     })
@@ -639,13 +685,14 @@ export async function createEmailShare(input: {
     .single();
   if (error || !row) {
     if (error?.code === "23505") return { result: { email, status: "already_shared" }, rawToken: null };
+    if (input.allowUpload && isMissingUploadColumn(error)) throw new MediaShareError(UPLOAD_SETUP_MESSAGE, 503);
     throw new MediaShareError("Could not share. Please try again.", 500);
   }
 
   await logShareEvent(input.subject, input.actorId, "shared", `Shared ${subjectLabel(input.subject)} with ${email}`, {
     share_id: row.id,
     kind: "email",
-    allow_download: input.allowDownload,
+    ...access,
     expiry_preset: input.expiryPreset,
   });
 
@@ -653,7 +700,7 @@ export async function createEmailShare(input: {
     return { result: { email, status: "invited" }, rawToken };
   }
 
-  const sent = await sendShareEmail(input.subject, email, rawToken);
+  const sent = await sendShareEmail(input.subject, email, rawToken, Boolean(input.allowUpload));
   if (!sent.sent) {
     return {
       result: { email, status: "notify_failed", error: sent.error ?? "The email could not be sent." },
@@ -668,6 +715,7 @@ export async function invitePeople(input: {
   subject: ShareSubject;
   emails: string[];
   allowDownload: boolean;
+  allowUpload?: boolean;
   expiryPreset: MediaShareExpiryPreset;
   actorId: string | null;
 }): Promise<MediaInviteResult[]> {
@@ -702,7 +750,7 @@ export async function resendEmailShare(input: {
     .is("revoked_at", null);
   if (error) throw new MediaShareError("Could not resend the invite.", 500);
 
-  const sent = await sendShareEmail(input.subject, share.email, rawToken);
+  const sent = await sendShareEmail(input.subject, share.email, rawToken, share.allow_upload === true);
   if (!sent.sent) {
     return { email: share.email, status: "notify_failed", error: sent.error ?? "The email could not be sent." };
   }
@@ -719,11 +767,13 @@ export async function resendEmailShare(input: {
 export async function enableShareLink(input: {
   subject: ShareSubject;
   allowDownload: boolean;
+  allowUpload?: boolean;
   expiryPreset: MediaShareExpiryPreset;
   actorId: string | null;
   /** Revoke the current link first and issue a new URL. */
   rotate?: boolean;
 }): Promise<{ rawToken: string | null }> {
+  const access = accessFields(input.subject, input.allowDownload, input.allowUpload);
   const db = await createTenantServiceClient(subjectBusinessId(input.subject));
   const current = (await activeSharesFor(input.subject)).find((r) => r.kind === "link");
   if (current && isLive(current) && !input.rotate) return { rawToken: null };
@@ -746,12 +796,13 @@ export async function enableShareLink(input: {
       kind: "link",
       access_token_hash: hashShareAccessToken(rawToken),
       token_ciphertext: sealLinkToken(rawToken),
-      allow_download: input.allowDownload,
+      ...access,
       created_by: input.actorId,
       ...windowFor(input.expiryPreset),
     })
     .select("id")
     .single();
+  if (input.allowUpload && isMissingUploadColumn(error)) throw new MediaShareError(UPLOAD_SETUP_MESSAGE, 503);
   if (error || !row) throw new MediaShareError("Could not create the link. Please try again.", 500);
 
   const rotated = Boolean(input.rotate && current);
@@ -763,7 +814,7 @@ export async function enableShareLink(input: {
     rotated
       ? `Reset the share link for ${label}; the old link no longer works`
       : `Turned on "anyone with the link" for ${label}`,
-    { share_id: row.id, kind: "link", allow_download: input.allowDownload, expiry_preset: input.expiryPreset }
+    { share_id: row.id, kind: "link", ...access, expiry_preset: input.expiryPreset }
   );
   return { rawToken };
 }
@@ -774,6 +825,7 @@ export async function updateShare(input: {
   subject: ShareSubject;
   shareId: string;
   allowDownload?: boolean;
+  allowUpload?: boolean;
   expiryPreset?: MediaShareExpiryPreset;
   actorId: string | null;
 }): Promise<void> {
@@ -781,20 +833,33 @@ export async function updateShare(input: {
   if (!share) throw new MediaShareError("Share not found.", 404);
 
   const patch: Record<string, unknown> = {};
-  if (typeof input.allowDownload === "boolean") patch.allow_download = input.allowDownload;
+  if (typeof input.allowDownload === "boolean" || typeof input.allowUpload === "boolean") {
+    Object.assign(
+      patch,
+      accessFields(
+        input.subject,
+        input.allowDownload ?? share.allow_download,
+        input.allowUpload ?? share.allow_upload,
+        typeof share.allow_upload === "boolean"
+      )
+    );
+  }
   if (input.expiryPreset) Object.assign(patch, windowFor(input.expiryPreset));
   if (Object.keys(patch).length === 0) return;
 
   const db = await createTenantServiceClient(subjectBusinessId(input.subject));
   const { error } = await db.from("media_shares").update(patch).eq("id", share.id).is("revoked_at", null);
+  if (error && isMissingUploadColumn(error)) throw new MediaShareError(UPLOAD_SETUP_MESSAGE, 503);
   if (error) throw new MediaShareError("Could not update sharing.", 500);
 
   const who = share.kind === "link" ? "the share link" : share.email;
   const changes = [
-    typeof input.allowDownload === "boolean"
-      ? input.allowDownload
-        ? "can download originals"
-        : "view only"
+    "allow_download" in patch
+      ? patch.allow_upload
+        ? "can upload"
+        : patch.allow_download
+          ? "can download originals"
+          : "view only"
       : null,
     input.expiryPreset ? `expiry ${input.expiryPreset}` : null,
   ].filter(Boolean);
@@ -846,6 +911,8 @@ export type ResolvedMediaShare = {
   /** Recipient for email shares — for logging only, never sent to the browser. */
   email: string | null;
   allowDownload: boolean;
+  /** May add files (library-folder shares with v135 "Can upload" only). */
+  allowUpload: boolean;
   subject: ShareSubject;
 };
 
@@ -873,9 +940,13 @@ export async function resolveMediaShareToken(
   const tokenHash = hashShareAccessToken(rawToken);
   let { data, error } = await db
     .from("media_shares")
-    .select(V126_SHARE_COLUMNS)
+    .select(V135_SHARE_COLUMNS)
     .eq("access_token_hash", tokenHash)
     .maybeSingle();
+  if (error) {
+    // Before migration v135: no allow_upload column yet.
+    ({ data, error } = await db.from("media_shares").select(V126_SHARE_COLUMNS).eq("access_token_hash", tokenHash).maybeSingle());
+  }
   if (error) {
     // Before migration v126: the new columns don't exist yet — photo/folder shares still resolve.
     ({ data, error } = await db.from("media_shares").select(SHARE_COLUMNS).eq("access_token_hash", tokenHash).maybeSingle());
@@ -933,6 +1004,7 @@ export async function resolveMediaShareToken(
     kind: share.kind,
     email: share.kind === "email" ? share.email : null,
     allowDownload: share.allow_download,
+    allowUpload: share.allow_upload === true && subject.kind === "library_folder",
     subject,
   };
 }

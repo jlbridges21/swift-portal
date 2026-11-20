@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Folder, Link2, MoreHorizontal, Users } from "lucide-react";
 import { RemoteImage } from "@/components/ui/remote-image";
-import { folderItemCountLabel, type LibraryFolderSummary } from "@/lib/library-folder-types";
+import { folderContentsLabel, type LibraryFolderSummary } from "@/lib/library-folder-types";
 import { LIBRARY_DRAG_MIME } from "@/components/admin/media-library/library-ui";
 import { cn } from "@/lib/utils";
 
@@ -127,7 +127,7 @@ export function FolderStripCard({ folder, onMenu, onDropItems, coverUrl = null }
           {folder.name}
         </p>
         <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted">
-          <span className="truncate">{folderItemCountLabel(folder.itemCount)}</span>
+          <span className="truncate">{folderContentsLabel(folder)}</span>
           {shared ? (
             <span className="inline-flex shrink-0 items-center text-accent" title="Shared">
               {folder.share.link ? <Link2 className="h-3.5 w-3.5" aria-hidden /> : <Users className="h-3.5 w-3.5" aria-hidden />}
@@ -177,7 +177,7 @@ export function FolderGalleryCard({ folder, coverUrl, onMenu, onDropItems }: Car
           <h3 className="truncate text-base font-semibold text-heading" title={folder.name}>
             {folder.name}
           </h3>
-          <p className="text-sm text-muted">{folderItemCountLabel(folder.itemCount)}</p>
+          <p className="text-sm text-muted">{folderContentsLabel(folder)}</p>
         </div>
         <MenuButton folder={folder} onMenu={onMenu} className="relative z-[2]" />
       </div>
@@ -208,7 +208,7 @@ export function FolderListRow({ folder, coverUrl, onMenu, onDropItems, updatedLa
           <ShareIndicator folder={folder} />
         </p>
         <p className="truncate text-xs text-muted">
-          {folderItemCountLabel(folder.itemCount)} · Updated {updatedLabel}
+          {folderContentsLabel(folder)} · Updated {updatedLabel}
         </p>
       </div>
       <MenuButton folder={folder} onMenu={onMenu} className="relative" />

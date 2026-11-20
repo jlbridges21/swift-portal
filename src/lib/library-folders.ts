@@ -54,12 +54,17 @@ export type LibraryFolderRow = {
   id: string;
   business_id: string;
   name: string;
+  /** v136 subfolders: null = top level (always null before the migration). */
+  parent_id?: string | null;
   cover_media_asset_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const FOLDER_COLUMNS = "id, business_id, name, cover_media_asset_id, created_at, updated_at";
+/** v136: read parent_id with a fallback so folders keep working before the migration. */
+const NESTED_FOLDER_COLUMNS = `${FOLDER_COLUMNS}, parent_id`;
+const SUBFOLDERS_SETUP_MESSAGE = "Subfolders aren't set up yet. Run supabase/migration-v136-library-subfolders.sql.";
 const PAGE = 1000;
 const IN_CHUNK = 150;
 
@@ -69,11 +74,77 @@ function chunk<T>(list: T[], size: number): T[][] {
   return out;
 }
 
+// ── Tree (v136) ────────────────────────────────────────────────────────────
+
+export type FolderNode = { id: string; parentId: string | null; name: string };
+
+/**
+ * Every folder's id, parent and name. Businesses have at most a few thousand folders, so the
+ * tree is walked in memory instead of with recursive SQL. `nested` is false before v136.
+ */
+export async function loadFolderTree(businessId: string): Promise<{ nodes: FolderNode[]; nested: boolean }> {
+  const db = await createTenantServiceClient(businessId);
+  const probe = await db.from("library_folders").select("parent_id").limit(1);
+  const nested = !probe.error;
+  const columns = nested ? "id, name, parent_id" : "id, name";
+  const nodes: FolderNode[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db.from("library_folders").select(columns).order("id").range(from, from + PAGE - 1);
+    if (error) break;
+    const rows = (data ?? []) as unknown as { id: string; name: string; parent_id?: string | null }[];
+    for (const r of rows) nodes.push({ id: r.id, name: r.name, parentId: r.parent_id ?? null });
+    if (rows.length < PAGE) break;
+  }
+  return { nodes, nested };
+}
+
+/** The folder and every folder beneath it (cycle-safe). Empty when the root isn't in the tree. */
+export function folderSubtreeIds(nodes: FolderNode[], rootId: string): string[] {
+  if (!nodes.some((n) => n.id === rootId)) return [];
+  const children = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (!n.parentId) continue;
+    const list = children.get(n.parentId) ?? [];
+    list.push(n.id);
+    children.set(n.parentId, list);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop() as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    for (const c of children.get(id) ?? []) stack.push(c);
+  }
+  return out;
+}
+
+/** Ancestors from the top level down to (and including) `id`. Stops at `stopAt` when given. */
+export function folderPath(nodes: FolderNode[], id: string, stopAt?: string): FolderNode[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const path: FolderNode[] = [];
+  const seen = new Set<string>();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    path.unshift(cur);
+    if (cur.id === stopAt) break;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return path;
+}
+
 // ── Reads ──────────────────────────────────────────────────────────────────
 
 export async function getLibraryFolder(businessId: string, folderId: string): Promise<LibraryFolderRow | null> {
   const db = await createTenantServiceClient(businessId);
-  const { data, error } = await db.from("library_folders").select(FOLDER_COLUMNS).eq("id", folderId).maybeSingle();
+  let { data, error } = await db.from("library_folders").select(NESTED_FOLDER_COLUMNS).eq("id", folderId).maybeSingle();
+  if (error) {
+    // Before v136 (no parent_id column).
+    ({ data, error } = await db.from("library_folders").select(FOLDER_COLUMNS).eq("id", folderId).maybeSingle());
+  }
   if (error) {
     if (isMissingLibraryFoldersRelation(error.message)) throw new LibraryFoldersSetupRequiredError();
     return null;
@@ -105,19 +176,35 @@ async function folderShareSummaries(db: TenantServiceClient): Promise<Record<str
   return out;
 }
 
-export type LibraryFolderList = { setupRequired: boolean; folders: LibraryFolderSummary[] };
+export type LibraryFolderList = {
+  setupRequired: boolean;
+  folders: LibraryFolderSummary[];
+  /** Migration v136 applied: folders may hold folders. */
+  subfoldersSupported: boolean;
+};
 
 /** Every folder in the business with its item count, cover, and live share summary. */
 export async function listLibraryFolders(businessId: string): Promise<LibraryFolderList> {
   const db = await createTenantServiceClient(businessId);
-  const { data, error } = await db.from("library_folders").select(FOLDER_COLUMNS).order("name");
+  let subfoldersSupported = true;
+  let { data, error }: { data: unknown[] | null; error: { message: string } | null } = await db
+    .from("library_folders")
+    .select(NESTED_FOLDER_COLUMNS)
+    .order("name");
   if (error) {
-    if (isMissingLibraryFoldersRelation(error.message)) return { setupRequired: true, folders: [] };
+    // Before v136 (no parent_id column): every folder is top-level.
+    subfoldersSupported = false;
+    ({ data, error } = await db.from("library_folders").select(FOLDER_COLUMNS).order("name"));
+  }
+  if (error) {
+    if (isMissingLibraryFoldersRelation(error.message)) return { setupRequired: true, folders: [], subfoldersSupported: false };
     console.error("[library-folders] list failed", error.message);
-    return { setupRequired: false, folders: [] };
+    return { setupRequired: false, folders: [], subfoldersSupported };
   }
   const rows = (data ?? []) as LibraryFolderRow[];
-  if (!rows.length) return { setupRequired: false, folders: [] };
+  if (!rows.length) return { setupRequired: false, folders: [], subfoldersSupported };
+  const childCounts = new Map<string, number>();
+  for (const r of rows) if (r.parent_id) childCounts.set(r.parent_id, (childCounts.get(r.parent_id) ?? 0) + 1);
 
   const [{ data: summaries, error: sumErr }, shares] = await Promise.all([
     db.raw.rpc("library_folder_summaries", { p_business_id: businessId }),
@@ -135,12 +222,15 @@ export async function listLibraryFolders(businessId: string): Promise<LibraryFol
 
   return {
     setupRequired: false,
+    subfoldersSupported,
     folders: rows.map((r) => {
       const s = byId.get(r.id);
       const auto = s?.auto_cover_id ?? videoCovers.get(r.id) ?? null;
       return {
         id: r.id,
         name: r.name,
+        parentId: r.parent_id ?? null,
+        subfolderCount: childCounts.get(r.id) ?? 0,
         itemCount: s?.item_count ?? 0,
         coverAssetId: r.cover_media_asset_id ?? auto,
         autoCoverAssetId: auto,
@@ -153,12 +243,18 @@ export async function listLibraryFolders(businessId: string): Promise<LibraryFol
   };
 }
 
-/** True when the folder has at least one live (unrevoked, unexpired) share. */
+/**
+ * True when the folder, or any folder above it, has a live (unrevoked, unexpired) share — a
+ * share of a folder also opens every subfolder in it.
+ */
 export async function libraryFolderIsShared(businessId: string, folderId: string): Promise<boolean> {
   const db = await createTenantServiceClient(businessId);
   const shares = await folderShareSummaries(db);
-  const s = shares[folderId];
-  return Boolean(s && (s.link || s.people > 0));
+  const live = (id: string) => Boolean(shares[id] && (shares[id].link || shares[id].people > 0));
+  if (live(folderId)) return true;
+  const { nodes, nested } = await loadFolderTree(businessId);
+  if (!nested) return false;
+  return folderPath(nodes, folderId).some((n) => live(n.id));
 }
 
 /** Newest-added uploaded video with a stored poster, per folder (YouTube links have none). */
@@ -238,19 +334,74 @@ export async function listFoldersContaining(businessId: string, ref: LibraryItem
 // ── Writes ─────────────────────────────────────────────────────────────────
 
 function duplicateName(name: string) {
-  return new LibraryFolderError(`A folder named “${name}” already exists. Choose another name.`, 409);
+  return new LibraryFolderError(`A folder named “${name}” already exists here. Choose another name.`, 409);
 }
 
-export async function createLibraryFolder(businessId: string, name: string, actorId: string | null): Promise<LibraryFolderRow> {
+/** Create a folder at the top level, or inside `parentId` (v136). */
+export async function createLibraryFolder(
+  businessId: string,
+  name: string,
+  actorId: string | null,
+  parentId: string | null = null,
+  /** A guest with a "Can upload" folder share made it (v136 attribution; no profile). */
+  createdViaShareId: string | null = null
+): Promise<LibraryFolderRow> {
+  const db = await createTenantServiceClient(businessId);
+  if (parentId) {
+    const parent = await getLibraryFolder(businessId, parentId);
+    if (!parent) throw new LibraryFolderError("Folder not found.", 404);
+    if (parent.parent_id === undefined) throw new LibraryFolderError(SUBFOLDERS_SETUP_MESSAGE, 503);
+  }
+  const { data, error } = await db
+    .from("library_folders")
+    .insert({
+      name,
+      created_by: actorId,
+      ...(parentId ? { parent_id: parentId } : {}),
+      ...(createdViaShareId ? { created_via_share_id: createdViaShareId } : {}),
+    })
+    .select(parentId ? NESTED_FOLDER_COLUMNS : FOLDER_COLUMNS)
+    .single();
+  if (error?.code === "23505") throw duplicateName(name);
+  if (error?.code === "23514") throw new LibraryFolderError(error.message, 400);
+  if (error || !data) fail(error, "Couldn't create the folder.");
+  if (parentId) await touchFolder(db, parentId);
+  return data as unknown as LibraryFolderRow;
+}
+
+/**
+ * Move a folder (with everything inside it) into `parentId`, or to the top level with null.
+ * Its shares keep working; it now also appears in shares of its new parent folders and drops
+ * out of shares of its old ones. The database refuses a move into itself or its own subfolder.
+ */
+export async function moveLibraryFolder(businessId: string, folderId: string, parentId: string | null): Promise<LibraryFolderRow> {
+  const folder = await getLibraryFolder(businessId, folderId);
+  if (!folder) throw new LibraryFolderError("Folder not found.", 404);
+  if (folder.parent_id === undefined) throw new LibraryFolderError(SUBFOLDERS_SETUP_MESSAGE, 503);
+  if ((folder.parent_id ?? null) === parentId) return folder;
+  if (parentId) {
+    if (parentId === folderId) throw new LibraryFolderError("A folder can't be moved into itself.", 400);
+    const { nodes } = await loadFolderTree(businessId);
+    if (!nodes.some((n) => n.id === parentId)) throw new LibraryFolderError("Folder not found.", 404);
+    if (folderSubtreeIds(nodes, folderId).includes(parentId)) {
+      throw new LibraryFolderError("A folder can't be moved into one of its own subfolders.", 400);
+    }
+  }
   const db = await createTenantServiceClient(businessId);
   const { data, error } = await db
     .from("library_folders")
-    .insert({ name, created_by: actorId })
-    .select(FOLDER_COLUMNS)
-    .single();
-  if (error?.code === "23505") throw duplicateName(name);
-  if (error || !data) fail(error, "Couldn't create the folder.");
-  return data as LibraryFolderRow;
+    .update({ parent_id: parentId, updated_at: new Date().toISOString() })
+    .eq("id", folderId)
+    .select(NESTED_FOLDER_COLUMNS)
+    .maybeSingle();
+  if (error?.code === "23505") {
+    throw new LibraryFolderError(`There's already a folder named “${folder.name}” there. Rename one of them first.`, 409);
+  }
+  if (error?.code === "23514") throw new LibraryFolderError(error.message, 400);
+  if (error) fail(error, "Couldn't move the folder.");
+  if (!data) throw new LibraryFolderError("Folder not found.", 404);
+  if (parentId) await touchFolder(db, parentId);
+  return data as unknown as LibraryFolderRow;
 }
 
 export async function renameLibraryFolder(businessId: string, folderId: string, name: string): Promise<LibraryFolderRow> {

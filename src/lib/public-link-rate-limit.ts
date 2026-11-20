@@ -77,6 +77,26 @@ export function allowPhotoShareAssetRequest(ip: string): { allowed: boolean; ret
   return take(photoAssetBuckets, ip || "unknown", PHOTO_ASSET_MAX, PHOTO_REQUEST_WINDOW_MS);
 }
 
+const shareUploadBuckets = new Map<string, Bucket>();
+const shareUploadNotifyBuckets = new Map<string, Bucket>();
+/** Sign + save per file: a 300-photo drop is ~600 requests, spread over the upload. */
+const SHARE_UPLOAD_MAX = 400;
+const SHARE_UPLOAD_WINDOW_MS = 60 * 1000;
+const SHARE_UPLOAD_NOTIFY_MAX = 6;
+const SHARE_UPLOAD_NOTIFY_WINDOW_MS = 10 * 60 * 1000;
+
+/** Guest uploads into a shared folder (v135), per IP across all tokens. */
+export function allowShareUploadRequest(ip: string): { allowed: boolean; retryAfterSec: number } {
+  sweep(shareUploadBuckets);
+  return take(shareUploadBuckets, ip || "unknown", SHARE_UPLOAD_MAX, SHARE_UPLOAD_WINDOW_MS);
+}
+
+/** "New uploads" notifications to the business, per share — one per finished batch, capped. */
+export function allowShareUploadNotify(shareId: string): boolean {
+  sweep(shareUploadNotifyBuckets);
+  return take(shareUploadNotifyBuckets, shareId, SHARE_UPLOAD_NOTIFY_MAX, SHARE_UPLOAD_NOTIFY_WINDOW_MS).allowed;
+}
+
 /** True once an IP has failed too many photo-share token lookups recently. */
 export function isPhotoShareLookupBlocked(ip: string): { blocked: boolean; retryAfterSec: number } {
   const cur = photoMissBuckets.get(ip || "unknown");
@@ -133,6 +153,8 @@ export function resetPublicLinkRateLimitsForTests() {
   photoRequestBuckets.clear();
   photoAssetBuckets.clear();
   photoMissBuckets.clear();
+  shareUploadBuckets.clear();
+  shareUploadNotifyBuckets.clear();
   videoRequestBuckets.clear();
   videoBeaconBuckets.clear();
   videoMissBuckets.clear();

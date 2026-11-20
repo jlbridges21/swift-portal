@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   deleteLibraryFolder,
   getLibraryFolder,
+  libraryFolderIsShared,
+  moveLibraryFolder,
   renameLibraryFolder,
   setLibraryFolderCover,
 } from "@/lib/library-folders";
@@ -37,15 +39,35 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 }
 
-/** Rename and/or set the cover. Body: { name?, coverAssetId?: uuid | null } (null = automatic). */
+/**
+ * Rename, set the cover, and/or move. Body: { name?, coverAssetId?: uuid | null, parentId?: uuid | null }
+ * (coverAssetId null = automatic; parentId null = top level).
+ */
 export async function PATCH(request: Request, { params }: Ctx) {
   const { id } = await params;
   const auth = await requireLibraryFolderAccess(true);
   if (!auth.ok) return auth.response;
   const bad = badFolderId(id);
   if (bad) return bad;
-  const body = (await request.json().catch(() => ({}))) as { name?: unknown; coverAssetId?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { name?: unknown; coverAssetId?: unknown; parentId?: unknown };
   try {
+    if (body.parentId !== undefined) {
+      if (body.parentId !== null && !isUuid(body.parentId)) {
+        return NextResponse.json({ error: "Folder not found." }, { status: 404 });
+      }
+      const parentId = body.parentId as string | null;
+      // Moving into or out of a shared folder changes who can see this folder's media.
+      const exposureChanges =
+        (await libraryFolderIsShared(auth.businessId, id)) ||
+        (parentId !== null && (await libraryFolderIsShared(auth.businessId, parentId)));
+      if (exposureChanges && !(await canManageWholeFolder(auth.businessId, auth.profile, { sharing: true }))) {
+        return NextResponse.json(
+          { error: "This changes what a shared folder shows, so only people who can share media may move it." },
+          { status: 403 }
+        );
+      }
+      await moveLibraryFolder(auth.businessId, id, parentId);
+    }
     if (body.name !== undefined) {
       const parsed = normalizeLibraryFolderName(body.name);
       if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -65,7 +87,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     const folder = await getLibraryFolder(auth.businessId, id);
     if (!folder) return NextResponse.json({ error: "Folder not found." }, { status: 404 });
     return NextResponse.json(
-      { folder: { id: folder.id, name: folder.name, coverAssetId: folder.cover_media_asset_id } },
+      { folder: { id: folder.id, name: folder.name, coverAssetId: folder.cover_media_asset_id, parentId: folder.parent_id ?? null } },
       { headers: NO_STORE }
     );
   } catch (err) {
