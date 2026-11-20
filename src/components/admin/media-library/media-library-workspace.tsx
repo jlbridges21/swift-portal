@@ -42,13 +42,19 @@ import {
 } from "@/lib/library-folder-types";
 import { cn } from "@/lib/utils";
 import { AssetBrowser, type LibraryFilterOptions } from "@/components/admin/media-library/asset-browser";
-import { FolderGalleryCard, FolderListRow, FolderStripCard, folderHref } from "@/components/admin/media-library/folder-cards";
+import {
+  FolderGalleryCard,
+  FolderListRow,
+  FolderStripCard,
+  folderHref,
+  useFolderDropTarget,
+} from "@/components/admin/media-library/folder-cards";
 import { CoverPickerDialog, FolderNameDialog, MoveFolderDialog } from "@/components/admin/media-library/folder-dialogs";
 import { LibrarySearch } from "@/components/admin/media-library/library-filters";
 import { ViewModeToggle, shortDate, useStoredViewMode, useThumbUrls } from "@/components/admin/media-library/library-ui";
 import {
-  addedToFolderMessage,
   changeFolderItems,
+  movedToFolderMessage,
   createLibraryFolderRequest,
   deleteLibraryFolderRequest,
   fetchLibraryFolders,
@@ -81,6 +87,34 @@ export type MediaLibraryWorkspaceProps = {
   openUploadOnMount?: boolean;
   pickForFolder?: { id: string; name: string } | null;
 };
+
+/** Breadcrumb link that also takes dropped folders (and media, for real folders) — desktop drag. */
+function DropCrumb({
+  href,
+  label,
+  targetId,
+  onDropItems,
+  onDropFolder,
+  className,
+}: {
+  href: string;
+  label: string;
+  targetId: string | null;
+  onDropItems?: (keys: string[]) => void;
+  onDropFolder?: (folderId: string) => void;
+  className?: string;
+}) {
+  const drop = useFolderDropTarget(targetId, onDropItems, onDropFolder);
+  return (
+    <Link
+      href={href}
+      {...drop.props}
+      className={cn("rounded px-0.5 hover:text-accent", drop.over && "bg-accent-subtle text-accent ring-2 ring-accent/40", className)}
+    >
+      {label}
+    </Link>
+  );
+}
 
 function TabLink({ href, active, icon: Icon, label, short, count }: { href: string; active: boolean; icon: typeof Folder; label: string; short: string; count: number | null }) {
   return (
@@ -197,16 +231,45 @@ export function MediaLibraryWorkspace({
     share.openShare({ id: f.id, name: f.name, kind: "library_folder", thumbUrl: null });
   }
 
-  async function dropOnFolder(target: LibraryFolderSummary, keys: string[]) {
-    if (!permissions.organize || !keys.length) return;
+  /** Media dropped on a folder card or breadcrumb moves there (one folder per item). */
+  async function dropOnFolder(target: { id: string; name: string }, keys: string[]) {
+    if (!permissions.organize || !keys.length || target.id === currentFolder?.id) return;
     try {
-      const r = await changeFolderItems(target.id, keys, "add");
-      toast.success(addedToFolderMessage(target.name, r));
+      const r = await changeFolderItems(target.id, keys, "move");
+      toast.success(movedToFolderMessage(target.name, r));
       refreshFolders();
+      if (currentFolder) setReloadSignal((n) => n + 1);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't add to the folder.");
+      toast.error(err instanceof Error ? err.message : "Couldn't move to the folder.");
     }
   }
+
+  const canMoveFolders = permissions.organize && subfoldersSupported && foldersReady;
+
+  /** Move a folder (and everything in it) inside `parentId`, or to the top level. Returns an error message or null. */
+  async function moveFolder(folderId: string, parentId: string | null): Promise<string | null> {
+    const moving = folders.find((f) => f.id === folderId);
+    if (!moving) return "Folder not found.";
+    if ((moving.parentId ?? null) === parentId) return null;
+    if (parentId && (parentId === folderId || libraryFolderDescendants(folders, folderId).some((f) => f.id === parentId))) {
+      const err = "A folder can't be moved into itself or one of its own subfolders.";
+      toast.error(err);
+      return err;
+    }
+    const err = await updateLibraryFolderRequest(folderId, { parentId });
+    if (err) {
+      toast.error(err);
+      return err;
+    }
+    const dest = parentId ? folders.find((f) => f.id === parentId)?.name : null;
+    setFolders((prev) => prev.map((f) => (f.id === folderId ? { ...f, parentId } : f)));
+    toast.success(dest ? `Moved “${moving.name}” into “${dest}”` : `Moved “${moving.name}” to the top level`);
+    refreshFolders();
+    router.refresh();
+    return null;
+  }
+
+  const dropFolderOn = canMoveFolders ? (target: LibraryFolderSummary, folderId: string) => void moveFolder(folderId, target.id) : undefined;
 
   const deletingSubfolders = deleting ? libraryFolderDescendants(folders, deleting.id).length : 0;
 
@@ -327,6 +390,7 @@ export function MediaLibraryWorkspace({
                   coverUrl={coverUrlFor(f)}
                   onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
                   onDropItems={permissions.organize ? (t, keys) => void dropOnFolder(t, keys) : undefined}
+                  onDropFolder={dropFolderOn}
                 />
               </li>
             ))}
@@ -497,6 +561,7 @@ export function MediaLibraryWorkspace({
                     folder={f}
                     coverUrl={coverUrlFor(f)}
                     onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
+                    onDropFolder={dropFolderOn}
                   />
                 </li>
               ))}
@@ -510,6 +575,7 @@ export function MediaLibraryWorkspace({
                   coverUrl={coverUrlFor(f)}
                   updatedLabel={shortDate(f.updatedAt)}
                   onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
+                  onDropFolder={dropFolderOn}
                 />
               ))}
             </ul>
@@ -524,15 +590,24 @@ export function MediaLibraryWorkspace({
               Media Library
             </Link>
             <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            <Link href="/admin/media/folders" className="shrink-0 rounded hover:text-accent">
-              Folders
-            </Link>
+            <DropCrumb
+              href="/admin/media/folders"
+              label="Folders"
+              targetId={null}
+              className="shrink-0"
+              onDropFolder={canMoveFolders ? (id) => void moveFolder(id, null) : undefined}
+            />
             <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {trail.slice(0, -1).map((f) => (
               <span key={f.id} className="flex min-w-0 items-center gap-1">
-                <Link href={folderHref(f.id)} className="max-w-[10rem] truncate rounded hover:text-accent">
-                  {f.name}
-                </Link>
+                <DropCrumb
+                  href={folderHref(f.id)}
+                  label={f.name}
+                  targetId={f.id}
+                  className="max-w-[10rem] truncate"
+                  onDropItems={permissions.organize ? (keys) => void dropOnFolder(f, keys) : undefined}
+                  onDropFolder={canMoveFolders ? (id) => void moveFolder(id, f.id) : undefined}
+                />
                 <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
               </span>
             ))}
@@ -597,6 +672,7 @@ export function MediaLibraryWorkspace({
                   coverUrl={coverUrlFor(f)}
                   onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
                   onDropItems={permissions.organize ? (t, keys) => void dropOnFolder(t, keys) : undefined}
+                  onDropFolder={dropFolderOn}
                 />
               </li>
             ))}
@@ -701,15 +777,9 @@ export function MediaLibraryWorkspace({
         onClose={() => setMoving(null)}
         onMove={async (parentId) => {
           if (!moving) return null;
-          const err = await updateLibraryFolderRequest(moving.id, { parentId });
-          if (err) return err;
-          const dest = parentId ? folders.find((f) => f.id === parentId)?.name : null;
-          setFolders((prev) => prev.map((f) => (f.id === moving.id ? { ...f, parentId } : f)));
-          toast.success(dest ? `Moved “${moving.name}” into “${dest}”` : `Moved “${moving.name}” to the top level`);
-          setMoving(null);
-          refreshFolders();
-          router.refresh();
-          return null;
+          const err = await moveFolder(moving.id, parentId);
+          if (!err) setMoving(null);
+          return err;
         }}
       />
 

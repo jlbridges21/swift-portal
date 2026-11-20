@@ -12,7 +12,9 @@ import {
   ExternalLink,
   Eye,
   FolderMinus,
+  FolderInput,
   FolderPlus,
+  ListChecks,
   ImageIcon,
   ImagePlus,
   Loader2,
@@ -71,8 +73,8 @@ import {
 } from "@/components/admin/media-library/library-ui";
 import { AddToFolderDialog, FolderNameDialog } from "@/components/admin/media-library/folder-dialogs";
 import {
-  addedToFolderMessage,
   changeFolderItems,
+  movedToFolderMessage,
   createLibraryFolderRequest,
   type FolderPermissions,
 } from "@/components/admin/media-library/folder-client";
@@ -388,19 +390,29 @@ export function AssetBrowser({
   }
 
   // ── Folder actions ───────────────────────────────────────────────────────
-  async function addKeysToFolder(folder: { id: string; name: string }, keys: string[]): Promise<boolean> {
+  /** Move: each item ends up in `folder` only (taken out of every other folder, this one included). */
+  async function moveKeysToFolder(folder: { id: string; name: string }, keys: string[]): Promise<boolean> {
     if (!keys.length) return false;
-    setBusyLabel(`Adding to “${folder.name}”…`);
+    setBusyLabel(`Moving to “${folder.name}”…`);
     try {
-      const r = await changeFolderItems(folder.id, keys, "add");
-      toast.success(addedToFolderMessage(folder.name, r), {
+      const r = await changeFolderItems(folder.id, keys, "move");
+      toast.success(movedToFolderMessage(folder.name, r), {
         action: inFolder?.id === folder.id ? undefined : { label: "Open", onClick: () => router.push(`/admin/media/folders/${folder.id}`) },
       });
       onFoldersChanged();
-      if (inFolder?.id === folder.id) void fetchPage(1, true);
+      if (inFolder?.id === folder.id) {
+        void fetchPage(1, true);
+      } else if (inFolder) {
+        // They left the folder being viewed.
+        const gone = new Set(keys);
+        setAssets((prev) => prev.filter((a) => !gone.has(assetKey(a))));
+        setTotal((t) => Math.max(0, t - gone.size + r.skipped));
+        if (drawerAsset && gone.has(assetKey(drawerAsset))) setDrawerAsset(null);
+      }
+      setSelection(EMPTY_SELECTION);
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't add to the folder.");
+      toast.error(err instanceof Error ? err.message : "Couldn't move to the folder.");
       return false;
     } finally {
       setBusyLabel(null);
@@ -446,7 +458,7 @@ export function AssetBrowser({
       toast.error("Select at least one item.");
       return;
     }
-    const ok = await addKeysToFolder(pickForFolder, items.map((i) => assetKey(i)));
+    const ok = await moveKeysToFolder(pickForFolder, items.map((i) => assetKey(i)));
     if (ok) router.push(`/admin/media/folders/${pickForFolder.id}`);
   }
 
@@ -602,7 +614,7 @@ export function AssetBrowser({
         ];
         if (canShareItems && canShareAsset(a)) items.push({ id: "share", label: "Share", icon: Share2, onSelect: () => openItemShare(a) });
         if (permissions.organize && foldersReady)
-          items.push({ id: "add", label: "Add to folder", icon: FolderPlus, onSelect: () => setAddDialog({ keys: [assetKey(a)] }) });
+          items.push({ id: "add", label: "Move to folder", icon: FolderInput, onSelect: () => setAddDialog({ keys: [assetKey(a)] }) });
         if (a.has_file && isFileKind(a.kind))
           items.push({ id: "download", label: "Download", icon: Download, onSelect: () => window.open(`/api/media/download/${a.id}?file=1`, "_blank") });
         if (href) items.push({ id: "project", label: "View original project", icon: ExternalLink, onSelect: () => router.push(href) });
@@ -770,12 +782,18 @@ export function AssetBrowser({
             <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
               {pickForFolder ? (
                 <Button variant="accent" className="h-10 rounded-xl" disabled={!selectedCount || bulkBusy} onClick={() => void confirmPickForFolder()}>
-                  <FolderPlus className="h-4 w-4" /> Add to “{pickForFolder.name}”
+                  <FolderInput className="h-4 w-4" /> Move to “{pickForFolder.name}”
                 </Button>
               ) : selectedCount > 0 ? (
                 <>
+                  <BulkButton
+                    icon={ListChecks}
+                    label={allMatchingSelected ? "Unselect all" : "Select all"}
+                    disabled={bulkBusy || total === 0}
+                    onClick={() => (allMatchingSelected ? exitSelect() : setSelection({ mode: "all", query: filterQuery, excluded: new Set() }))}
+                  />
                   {permissions.organize && foldersReady ? (
-                    <BulkButton icon={FolderPlus} label="Add to Folder" disabled={bulkBusy} onClick={() => void bulkAddToFolder()} />
+                    <BulkButton icon={FolderInput} label="Move" disabled={bulkBusy} onClick={() => void bulkAddToFolder()} />
                   ) : null}
                   {canShareItems && (selectedCount === 1 || permissions.shareFolders) ? (
                     <BulkButton icon={Share2} label="Share" disabled={bulkBusy} onClick={() => void bulkShare()} />
@@ -949,7 +967,7 @@ export function AssetBrowser({
         folders={folders}
         excludeFolderId={inFolder?.id}
         onClose={() => setAddDialog(null)}
-        onPick={(folder) => addKeysToFolder(folder, addDialog?.keys ?? [])}
+        onPick={(folder) => moveKeysToFolder(folder, addDialog?.keys ?? [])}
         onCreate={async (name) => {
           const result = await createLibraryFolderRequest(name);
           if (typeof result !== "string") onFoldersChanged();
@@ -1049,7 +1067,7 @@ export function AssetBrowser({
                 ) : null}
                 {permissions.organize && foldersReady ? (
                   <Button variant="outline" size="sm" onClick={() => setAddDialog({ keys: [assetKey(drawerAsset)] })}>
-                    <FolderPlus className="h-4 w-4" /> Add to folder
+                    <FolderInput className="h-4 w-4" /> Move to folder
                   </Button>
                 ) : null}
                 {inFolder && permissions.organize ? (

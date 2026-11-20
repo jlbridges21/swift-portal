@@ -565,6 +565,40 @@ export async function addLibraryFolderItems(
 }
 
 /** Remove references only — the assets themselves are never touched. */
+/**
+ * Move assets into `folderId`: add them there, then take them out of every other folder, so
+ * each one lives in exactly one folder. Nothing is copied or deleted — only membership rows
+ * change, and the assets keep their projects. Callers authorize the refs first.
+ */
+export async function moveIntoLibraryFolder(
+  businessId: string,
+  folderId: string,
+  refs: LibraryItemRef[],
+  actorId: string | null
+): Promise<{ added: number; alreadyInFolder: number; movedFrom: number }> {
+  const result = await addLibraryFolderItems(businessId, folderId, refs, actorId);
+  const db = await createTenantServiceClient(businessId);
+  let movedFrom = 0;
+  const touched = new Set<string>();
+  const groups: Record<"media_asset_id" | "tour_id" | "model_id", string[]> = { media_asset_id: [], tour_id: [], model_id: [] };
+  for (const r of refs) groups[libraryItemColumn(r.kind)].push(r.id);
+  for (const [column, ids] of Object.entries(groups) as ["media_asset_id" | "tour_id" | "model_id", string[]][]) {
+    for (const part of chunk([...new Set(ids)], IN_CHUNK)) {
+      const { data, error } = await db
+        .from("library_folder_items")
+        .delete()
+        .neq("folder_id", folderId)
+        .in(column, part)
+        .select("folder_id");
+      if (error) fail(error, "Moved into the folder, but couldn't take the items out of their old folders.");
+      movedFrom += data?.length ?? 0;
+      for (const row of (data ?? []) as { folder_id: string }[]) touched.add(row.folder_id);
+    }
+  }
+  for (const id of touched) await touchFolder(db, id);
+  return { ...result, movedFrom };
+}
+
 export async function removeLibraryFolderItems(
   businessId: string,
   folderId: string,
