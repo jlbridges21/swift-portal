@@ -2,7 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Folder, ImageIcon, Images, Link2, Lock, ShieldCheck, Upload, UploadCloud } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Download,
+  Folder,
+  Home,
+  ImageIcon,
+  Images,
+  Link2,
+  Lock,
+  MoreHorizontal,
+  ShieldCheck,
+  Upload,
+  UploadCloud,
+} from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import { PhotoShareHeader } from "@/components/photos/photo-share-viewer";
 import { FILTERS, Lightbox, Tile } from "@/components/photos/shared-media-viewer";
 import {
@@ -15,7 +31,14 @@ import {
   useWindowFileDrop,
 } from "@/components/photos/shared-folder-uploader";
 import type { SharedFolderCover, SharedSubfolder } from "@/lib/library-folder-shares";
-import { sharedItemUrl, type SharedMediaItem, type SharedMediaKind } from "@/lib/shared-media-types";
+import {
+  SHARED_ZIP_FILES_PER_PART,
+  sharedItemUrl,
+  sharedZipUrl,
+  type SharedMediaItem,
+  type SharedMediaKind,
+} from "@/lib/shared-media-types";
+import type { DownloadQuality } from "@/lib/download-quality";
 import { MAX_PHOTO_FILE_SIZE_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from "@/lib/upload/constants";
 import { cn } from "@/lib/utils";
 
@@ -32,10 +55,187 @@ import { cn } from "@/lib/utils";
  */
 
 type Crumb = { id: string; name: string };
+/** URL for a folder in this share (null = the shared folder itself). */
+type HrefFor = (folderId: string | null) => string;
 
-function folderUrl(token: string, folderId: string | null): string {
-  const base = `/shared/${encodeURIComponent(token)}`;
-  return folderId ? `${base}?folder=${encodeURIComponent(folderId)}` : base;
+function makeHrefFor(base: string): HrefFor {
+  return (folderId) => (folderId ? `${base}?folder=${encodeURIComponent(folderId)}` : base);
+}
+
+// ── Breadcrumbs ──────────────────────────────────────────────────────────────
+
+/**
+ * Home (the shared folder) › parents › current. Long paths collapse to Home › … › parent ›
+ * current on phones; the … opens the hidden folders so every level stays reachable.
+ */
+function Breadcrumbs({ trail, hrefFor }: { trail: Crumb[]; hrefFor: HrefFor }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [moreOpen]);
+
+  const crumbHref = (i: number) => hrefFor(i === 0 ? null : trail[i].id);
+  // Phones show Home › … › parent › current. The Home icon already is the shared folder, so
+  // its name is hidden there too; the … menu lists the folders in between.
+  const phoneHidden = trail.length > 2 ? trail.slice(0, -2).map((_, k) => k) : [];
+  const menuItems = phoneHidden.filter((k) => k > 0);
+  const sep = <ChevronRight className="h-4 w-4 shrink-0 text-muted/60" aria-hidden />;
+  const crumbClass =
+    "min-w-0 truncate rounded-md px-1 py-0.5 font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
+  return (
+    <nav aria-label="Breadcrumb" className="min-w-0">
+      <ol className="flex min-w-0 items-center gap-1 rounded-2xl border border-border bg-card/80 px-2.5 py-2 text-sm shadow-sm sm:px-3">
+        <li className="flex shrink-0 items-center">
+          <Link
+            href={hrefFor(null)}
+            aria-label={`Home: ${trail[0]?.name ?? "shared folder"}`}
+            title={trail[0]?.name}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Home className="h-4 w-4" aria-hidden />
+          </Link>
+        </li>
+        {/* Phones: one … in place of the folders between Home and the parent. */}
+        {menuItems.length ? (
+          <li ref={moreRef} className="relative flex shrink-0 items-center gap-1 sm:hidden">
+            {sep}
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-label={`Show ${menuItems.length} more ${menuItems.length === 1 ? "folder" : "folders"}`}
+              aria-expanded={moreOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
+            </button>
+            {moreOpen ? (
+              <ul className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] max-w-[70vw] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl">
+                {menuItems.map((k) => (
+                  <li key={trail[k].id}>
+                    <Link
+                      href={crumbHref(k)}
+                      onClick={() => setMoreOpen(false)}
+                      className="flex min-h-11 items-center gap-2 truncate px-3 text-sm font-medium text-heading hover:bg-subtle"
+                    >
+                      <Folder className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+                      <span className="truncate">{trail[k].name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ) : null}
+        {trail.map((c, i) => {
+          const last = i === trail.length - 1;
+          const isHidden = phoneHidden.includes(i);
+          return (
+            <li
+              key={c.id}
+              className={cn("min-w-0 items-center gap-1", isHidden ? "hidden sm:flex" : "flex", last ? "flex-1 sm:flex-none" : "max-w-[45%] sm:max-w-[14rem]")}
+            >
+              {sep}
+              {last ? (
+                <span aria-current="page" className="min-w-0 truncate px-1 font-semibold text-heading" title={c.name}>
+                  {c.name}
+                </span>
+              ) : (
+                <Link href={crumbHref(i)} className={crumbClass} title={c.name}>
+                  {c.name}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+// ── Download all ─────────────────────────────────────────────────────────────
+
+/**
+ * Header button: pick quality (print / MLS for photos), then download one ZIP — or, for big
+ * folders, a list of parts so each download finishes reliably.
+ */
+function DownloadAllButton({ token, folderId, folderName, count }: { token: string; folderId: string | null; folderName: string; count: number }) {
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [partsFor, setPartsFor] = useState<DownloadQuality | null>(null);
+  const parts = Math.ceil(count / SHARED_ZIP_FILES_PER_PART);
+
+  function start(quality: DownloadQuality) {
+    if (parts <= 1) {
+      const a = document.createElement("a");
+      a.href = sharedZipUrl(token, folderId, quality);
+      a.rel = "noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    setPartsFor(quality);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setQualityOpen(true)}
+        aria-label={`Download all ${count.toLocaleString()} files`}
+        title={`Download all (${count.toLocaleString()} ${count === 1 ? "file" : "files"})`}
+        className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-heading shadow-sm transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <Download className="h-4 w-4" aria-hidden />
+        <span className="hidden sm:inline">Download all</span>
+      </button>
+      <DownloadQualityDialog
+        open={qualityOpen}
+        onClose={() => setQualityOpen(false)}
+        title={`Download “${folderName}”`}
+        zipMode
+        confirmLabel={parts > 1 ? "Continue" : "Download ZIP"}
+        onConfirm={start}
+      />
+      <Modal open={partsFor !== null} onClose={() => setPartsFor(null)} title={`Download “${folderName}”`} className="sm:max-w-md">
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            {count.toLocaleString()} files are split into {parts} ZIP files so each one downloads reliably. Download each part:
+          </p>
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+            {Array.from({ length: parts }, (_, i) => i + 1).map((part) => (
+              <li key={part}>
+                <a
+                  href={partsFor ? sharedZipUrl(token, folderId, partsFor, part, parts) : "#"}
+                  rel="noreferrer"
+                  className="flex min-h-12 items-center justify-between gap-3 px-4 text-sm font-medium text-heading hover:bg-subtle"
+                >
+                  <span>
+                    Part {part} of {parts}
+                    <span className="ml-2 text-xs text-muted">
+                      {Math.min(SHARED_ZIP_FILES_PER_PART, count - (part - 1) * SHARED_ZIP_FILES_PER_PART).toLocaleString()} files
+                    </span>
+                  </span>
+                  <Download className="h-4 w-4 text-accent" aria-hidden />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Modal>
+    </>
+  );
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -81,7 +281,8 @@ function FadeImage({ src, className, onFail }: { src: string; className?: string
 function Hero({
   token,
   name,
-  trail,
+  parentHref,
+  parentName,
   cover,
   folderCount,
   itemCount,
@@ -92,7 +293,9 @@ function Hero({
   name: string;
   /** The permissions bar overlaps the bottom edge: keep the text clear of it. */
   overlapped?: boolean;
-  trail: Crumb[];
+  /** Subfolders only: the immediate parent, for the back button. */
+  parentHref: string | null;
+  parentName: string | null;
   cover: SharedFolderCover | null;
   folderCount: number;
   itemCount: number;
@@ -128,29 +331,23 @@ function Hero({
           </span>
           <span className="rounded-full bg-black/25 px-2.5 py-1 text-xs font-medium backdrop-blur-sm">{access}</span>
         </div>
-        <div className="min-w-0 space-y-1.5">
-          {trail.length > 1 ? (
-            <nav aria-label="Folders" className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-white/80">
-              {trail.slice(0, -1).map((f, i) => (
-                <span key={f.id} className="flex min-w-0 items-center gap-1">
-                  <Link
-                    href={folderUrl(token, i === 0 ? null : f.id)}
-                    className="max-w-[11rem] truncate rounded underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  >
-                    {f.name}
-                  </Link>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-                </span>
-              ))}
-              <span className="sr-only" aria-current="page">
-                {name}
-              </span>
-            </nav>
+        <div className="flex min-w-0 items-end gap-3 sm:gap-4">
+          {parentHref ? (
+            <Link
+              href={parentHref}
+              aria-label={`Back to ${parentName ?? "parent folder"}`}
+              title={`Back to ${parentName ?? "parent folder"}`}
+              className="mb-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/30 text-white ring-1 ring-white/30 backdrop-blur-md transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden />
+            </Link>
           ) : null}
+          <div className="min-w-0 space-y-1">
           <h1 id="shared-folder-title" className="break-words text-3xl font-semibold tracking-tight [text-shadow:0_1px_12px_rgba(0,0,0,0.25)] sm:text-4xl">
             {name}
           </h1>
           <p className="text-sm text-white/85 sm:text-base">{countsLine(folderCount, itemCount)}</p>
+          </div>
         </div>
       </div>
     </section>
@@ -267,10 +464,12 @@ function DropZone({ folderName, active, onFiles }: { folderName: string; active:
 function FolderCard({
   token,
   folder,
+  href,
   onUpload,
 }: {
   token: string;
   folder: SharedSubfolder;
+  href: string;
   /** Upload-enabled links: files picked on the card or dropped on it go into this folder. */
   onUpload?: (files: FileList) => void;
 }) {
@@ -319,7 +518,7 @@ function FolderCard({
       )}
     >
       <Link
-        href={folderUrl(token, folder.id)}
+        href={href}
         aria-label={`Open folder ${folder.name}`}
         className="absolute inset-0 z-[1] rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
       />
@@ -438,6 +637,8 @@ export function LibraryFolderShareViewer({
   allowDownload,
   allowUpload = false,
   allowCreateFolders = false,
+  downloadableCount = 0,
+  basePath,
   truncated,
 }: {
   token: string;
@@ -457,8 +658,14 @@ export function LibraryFolderShareViewer({
   allowUpload?: boolean;
   /** "Can upload" guests may also add folders here (v136). */
   allowCreateFolders?: boolean;
+  /** Files "Download all" would include (0 hides the button). */
+  downloadableCount?: number;
+  /** Where folder links point; defaults to /shared/{token}. */
+  basePath?: string;
   truncated: boolean;
 }) {
+  const hrefFor = makeHrefFor(basePath ?? `/shared/${encodeURIComponent(token)}`);
+  const parent = trail.length > 1 ? trail[trail.length - 2] : null;
   const uploader = useSharedFolderUploader(token, folderId);
   const dragging = useWindowFileDrop(uploader.addFiles, allowUpload);
   const [filter, setFilter] = useState<"all" | SharedMediaKind>("all");
@@ -473,10 +680,13 @@ export function LibraryFolderShareViewer({
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <PhotoShareHeader>
-        {allowUpload ? (
+        {allowUpload || (allowDownload && downloadableCount > 0) ? (
           <div className="flex shrink-0 items-center gap-2">
-            {allowCreateFolders ? <SharedNewFolderButton token={token} folderId={folderId} folderName={folderName} /> : null}
-            <SharedUploadButton onFiles={uploader.addFiles} />
+            {allowDownload && downloadableCount > 0 ? (
+              <DownloadAllButton token={token} folderId={folderId} folderName={folderName} count={downloadableCount} />
+            ) : null}
+            {allowUpload && allowCreateFolders ? <SharedNewFolderButton token={token} folderId={folderId} folderName={folderName} /> : null}
+            {allowUpload ? <SharedUploadButton onFiles={uploader.addFiles} /> : null}
           </div>
         ) : null}
       </PhotoShareHeader>
@@ -487,11 +697,13 @@ export function LibraryFolderShareViewer({
           uploader.rows.length > 0 && "pb-44 sm:pb-10"
         )}
       >
-        <div className="flex flex-col">
+        <Breadcrumbs trail={trail.length ? trail : [{ id: folderId ?? "root", name: folderName }]} hrefFor={hrefFor} />
+        <div className="-mt-2 flex flex-col sm:-mt-4">
           <Hero
             token={token}
             name={folderName}
-            trail={trail}
+            parentHref={parent ? hrefFor(trail.length === 2 ? null : parent.id) : null}
+            parentName={parent?.name ?? null}
             cover={cover}
             folderCount={subfolders.length}
             itemCount={totalItems ?? items.length}
@@ -512,6 +724,7 @@ export function LibraryFolderShareViewer({
                   <FolderCard
                     token={token}
                     folder={f}
+                    href={hrefFor(f.id)}
                     onUpload={allowUpload ? (files) => uploader.addFiles(files, { id: f.id, name: f.name }) : undefined}
                   />
                 </li>

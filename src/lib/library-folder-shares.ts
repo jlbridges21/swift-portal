@@ -345,6 +345,8 @@ export type SharedFolderView = {
   cover: SharedFolderCover | null;
   /** Everything this share shows in the folder and all folders beneath it (each item once). */
   totalItems: number;
+  /** Of those, how many "Download all" would include right now (share + project download rules). */
+  downloadableCount: number;
   /** Subfolders are supported (v136), so a "Can upload" guest may create folders. */
   nested: boolean;
 };
@@ -423,12 +425,14 @@ export async function getSharedFolderView(share: ResolvedMediaShare, folderId: s
   const childStats = new Map<string, { direct: Set<string>; previews: string[]; firstCover: SharedFolderCover | null }>();
   for (const c of children) childStats.set(c.id, { direct: new Set(), previews: [], firstCover: null });
   let heroFallback: SharedFolderCover | null = null;
+  const downloadable = new Set<string>();
 
   for (const r of rows) {
     const mk = memberKey(r);
     const src = mk ? byMember.get(mk) : undefined;
     if (!mk || !src) continue;
     seenAll.add(mk);
+    if (src.item.canDownload && src.filePath) downloadable.add(mk);
     heroFallback ??= coverOf(src);
     if (r.folder_id === targetId) {
       if (!seenTarget.has(mk) && items.length < SHARED_FOLDER_MAX_ITEMS) {
@@ -474,8 +478,56 @@ export async function getSharedFolderView(share: ResolvedMediaShare, folderId: s
     items,
     cover: covers.get(targetId) ?? heroFallback,
     totalItems: seenAll.size,
+    downloadableCount: downloadable.size,
     nested: tree.nested,
   };
+}
+
+/** One file "Download all" puts in the ZIP. */
+export type SharedDownloadFile = {
+  src: SharedItemSource;
+  /** Folder names from the folder being downloaded down to the file's folder (empty = top level). */
+  dir: string[];
+};
+
+/**
+ * Every file "Download all" may include for the folder being viewed and everything beneath it,
+ * in gallery order (newest first per folder, folders as they nest). Each asset once — at its
+ * shallowest folder. Only items whose download is allowed right now (share setting AND the
+ * item's project download rule) with a stored file. Returns null when the folder isn't in
+ * the share.
+ */
+export async function listSharedDownloadFiles(
+  share: ResolvedMediaShare,
+  folderId: string | null
+): Promise<{ folderName: string; files: SharedDownloadFile[] } | null> {
+  const tree = await sharedFolderTree(share);
+  if (!tree) return null;
+  const targetId = folderId ?? tree.rootId;
+  if (!tree.ids.includes(targetId)) return null;
+  const folderName = tree.nodes.find((n) => n.id === targetId)?.name ?? (share.subject.kind === "library_folder" ? share.subject.libraryFolder.name : "Shared folder");
+  if (!share.allowDownload) return { folderName, files: [] };
+  const subtree = folderSubtreeIds(tree.nodes, targetId);
+  const rows = await loadMembersForFolders(share.businessId, subtree.length ? subtree : [targetId]);
+  const ids = [...new Set(rows.map((r) => r.media_asset_id).filter((x): x is string => Boolean(x)))];
+  const sources = await sourcesFor(share, { media: ids, tour: [], model: [] }, true);
+  const byId = new Map<string, SharedItemSource>();
+  for (const src of sources.values()) byId.set(src.id, src);
+
+  const depth = (fid: string) => folderPath(tree.nodes, fid, targetId).length;
+  const dirOf = (fid: string) => folderPath(tree.nodes, fid, targetId).slice(1).map((n) => n.name);
+  // Shallowest folder first so an asset in several folders lands nearest the top.
+  const ordered = [...rows].sort((a, b) => depth(a.folder_id) - depth(b.folder_id));
+  const seen = new Set<string>();
+  const out: SharedDownloadFile[] = [];
+  for (const r of ordered) {
+    if (!r.media_asset_id || seen.has(r.media_asset_id)) continue;
+    const src = byId.get(r.media_asset_id);
+    if (!src || !src.item.canDownload || !src.filePath) continue;
+    seen.add(r.media_asset_id);
+    out.push({ src, dir: dirOf(r.folder_id) });
+  }
+  return { folderName, files: out };
 }
 
 /**

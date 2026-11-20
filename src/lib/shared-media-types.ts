@@ -27,3 +27,23 @@ export type SharedMediaItem = {
 export function sharedItemUrl(token: string, key: string, variant: "thumb" | "preview" | "poster" | "stream" | "original" | "inline") {
   return `/api/public/shared/${encodeURIComponent(token)}?item=${encodeURIComponent(key)}&variant=${variant}`;
 }
+
+/** Files per "Download all" ZIP; bigger folders download in parts so each finishes in time. */
+export const SHARED_ZIP_FILES_PER_PART = 150;
+
+/** "Download all" ZIP for a shared folder (folderId null = the shared folder itself). */
+export function sharedZipUrl(
+  token: string,
+  folderId: string | null,
+  quality: "print" | "mls",
+  part = 1,
+  parts = 1
+): string {
+  const q = new URLSearchParams({ quality });
+  if (folderId) q.set("folder", folderId);
+  if (parts > 1) {
+    q.set("part", String(part));
+    q.set("parts", String(parts));
+  }
+  return `/api/public/shared/${encodeURIComponent(token)}/download-zip?${q.toString()}`;
+}
