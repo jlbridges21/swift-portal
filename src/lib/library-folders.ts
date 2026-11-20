@@ -257,6 +257,36 @@ export async function libraryFolderIsShared(businessId: string, folderId: string
   return folderPath(nodes, folderId).some((n) => live(n.id));
 }
 
+/**
+ * Cover candidates per folder, best first — the same order the portal's folder cards use:
+ * the manual cover, then the newest photo added, then the newest video with a stored poster.
+ * Callers that show covers outside the business (shared links) must still check each one.
+ */
+export async function folderCoverCandidates(businessId: string, folderIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!folderIds.length) return out;
+  const db = await createTenantServiceClient(businessId);
+  const manual = new Map<string, string>();
+  for (const part of chunk(folderIds, IN_CHUNK)) {
+    const { data } = await db.from("library_folders").select("id, cover_media_asset_id").in("id", part);
+    for (const r of (data ?? []) as { id: string; cover_media_asset_id: string | null }[]) {
+      if (r.cover_media_asset_id) manual.set(r.id, r.cover_media_asset_id);
+    }
+  }
+  const { data: summaries } = await db.raw.rpc("library_folder_summaries", { p_business_id: businessId });
+  const auto = new Map<string, string>();
+  for (const sRow of (summaries ?? []) as { folder_id: string; auto_cover_id: string | null }[]) {
+    if (sRow.auto_cover_id) auto.set(sRow.folder_id, sRow.auto_cover_id);
+  }
+  const needVideo = folderIds.filter((id) => !auto.has(id));
+  const video = needVideo.length ? await newestVideoPosters(db, needVideo) : new Map<string, string>();
+  for (const id of folderIds) {
+    const list = [manual.get(id), auto.get(id), video.get(id)].filter((x): x is string => Boolean(x));
+    out.set(id, [...new Set(list)]);
+  }
+  return out;
+}
+
 /** Newest-added uploaded video with a stored poster, per folder (YouTube links have none). */
 async function newestVideoPosters(db: TenantServiceClient, folderIds: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
@@ -315,6 +345,39 @@ export async function loadLibraryFolderMembers(businessId: string, folderId: str
     if (rows.length < PAGE) break;
   }
   return members;
+}
+
+export type FolderMemberRow = {
+  folder_id: string;
+  media_asset_id: string | null;
+  tour_id: string | null;
+  model_id: string | null;
+  added_at: string;
+};
+
+/**
+ * Membership rows for several folders at once, newest-added first, stopping at `limit` rows.
+ * Used by shared-folder pages to build counts, previews and covers in one pass.
+ */
+export async function loadMembersForFolders(businessId: string, folderIds: string[], limit = 20_000): Promise<FolderMemberRow[]> {
+  const db = await createTenantServiceClient(businessId);
+  const out: FolderMemberRow[] = [];
+  for (const part of chunk([...new Set(folderIds)], IN_CHUNK)) {
+    for (let from = 0; out.length < limit; from += PAGE) {
+      const { data, error } = await db
+        .from("library_folder_items")
+        .select("folder_id, media_asset_id, tour_id, model_id, added_at")
+        .in("folder_id", part)
+        .order("added_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) fail(error, "Couldn't load this folder.");
+      const rows = (data ?? []) as FolderMemberRow[];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+  }
+  return out.sort((a, b) => b.added_at.localeCompare(a.added_at)).slice(0, limit);
 }
 
 /** Folders (id + name) that contain this asset — for the asset drawer. */

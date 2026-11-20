@@ -26,6 +26,10 @@ type Status = "queued" | "uploading" | "saving" | "done" | "error";
 
 type UploadRow = {
   id: string;
+  /** Destination folder; null = the shared folder itself. */
+  folderId: string | null;
+  /** Shown in the tray when it differs from the page being viewed. */
+  folderName: string | null;
   file: File;
   mediaType: "photo" | "video";
   status: Status;
@@ -79,7 +83,8 @@ export function useSharedFolderUploader(token: string, folderId: string | null =
   const [rows, setRows] = useState<UploadRow[]>([]);
   const rowsRef = useRef<UploadRow[]>([]);
   const active = useRef(0);
-  const batchDone = useRef(0);
+  /** Finished uploads per destination folder in the current batch ("" = the shared folder). */
+  const batchDone = useRef(new Map<string, number>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The pump re-runs itself when a slot frees up; a ref avoids a self-referencing callback. */
   const pumpRef = useRef<() => void>(() => {});
@@ -111,7 +116,7 @@ export function useSharedFolderUploader(token: string, folderId: string | null =
             mimeType: next.file.type,
             fileSize: next.file.size,
             mediaType: next.mediaType,
-            folderId,
+            folderId: next.folderId,
           });
           await putFile(sign.signedUrl, next.file, sign.mimeType, (pct) => patch(next.id, { progress: pct }));
           patch(next.id, { status: "saving", progress: 99 });
@@ -127,36 +132,45 @@ export function useSharedFolderUploader(token: string, folderId: string | null =
             }
           }
           patch(next.id, { status: "done", progress: 100 });
-          batchDone.current += 1;
+          const k = next.folderId ?? "";
+          batchDone.current.set(k, (batchDone.current.get(k) ?? 0) + 1);
           scheduleRefresh();
         } catch (err) {
           patch(next.id, { status: "error", error: err instanceof Error ? err.message : "Upload failed." });
         } finally {
           active.current -= 1;
           const pending = rowsRef.current.some((r) => r.status === "queued" || r.status === "uploading" || r.status === "saving");
-          if (!pending && batchDone.current > 0) {
-            const count = batchDone.current;
-            batchDone.current = 0;
-            void postJson(endpoint, { action: "done", count, folderId }).catch(() => {});
+          if (!pending && batchDone.current.size) {
+            const done = [...batchDone.current];
+            batchDone.current = new Map();
+            for (const [k, count] of done) {
+              void postJson(endpoint, { action: "done", count, folderId: k || null }).catch(() => {});
+            }
           }
           pumpRef.current();
         }
       })();
     }
-  }, [endpoint, folderId, patch, scheduleRefresh]);
+  }, [endpoint, patch, scheduleRefresh]);
 
   useEffect(() => {
     pumpRef.current = pump;
   }, [pump]);
 
+  /**
+   * Queue files. With no `target`, they go to the folder being viewed; a subfolder card passes
+   * its own folder so files dropped on it land there.
+   */
   const addFiles = useCallback(
-    (files: FileList | File[]) => {
+    (files: FileList | File[], target?: { id: string; name: string }) => {
       const list = Array.from(files);
       if (!list.length) return;
       const added: UploadRow[] = list.map((file) => {
         const mediaType = mediaTypeOf(file);
         return {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          folderId: target ? target.id : folderId,
+          folderName: target ? target.name : null,
           file,
           mediaType: mediaType ?? "photo",
           status: mediaType ? "queued" : "error",
@@ -168,7 +182,7 @@ export function useSharedFolderUploader(token: string, folderId: string | null =
       setRows(rowsRef.current);
       pump();
     },
-    [pump]
+    [pump, folderId]
   );
 
   const retry = useCallback(
@@ -352,69 +366,51 @@ export function useWindowFileDrop(onFiles: (files: FileList) => void, enabled: b
       depth.current = Math.max(0, depth.current - 1);
       if (depth.current === 0) setDragging(false);
     };
+    // Capture phase: always clear the drag state, even when a folder card handles the drop.
+    const onDropCapture = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth.current = 0;
+      setDragging(false);
+    };
+    // Bubble phase: a drop anywhere else uploads to the folder being viewed.
     const onDrop = (e: DragEvent) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
-      depth.current = 0;
-      setDragging(false);
       if (e.dataTransfer?.files.length) onFiles(e.dataTransfer.files);
     };
     window.addEventListener("dragenter", onEnter);
     window.addEventListener("dragover", onOver);
     window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDropCapture, true);
     window.addEventListener("drop", onDrop);
     return () => {
       window.removeEventListener("dragenter", onEnter);
       window.removeEventListener("dragover", onOver);
       window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDropCapture, true);
       window.removeEventListener("drop", onDrop);
     };
   }, [enabled, onFiles]);
   return dragging;
 }
 
-export function DropOverlay({ folderName }: { folderName: string }) {
+/**
+ * Hint shown while files are dragged over the page. Deliberately light (no blur, no full-screen
+ * card) so the folder cards underneath stay visible as drop targets.
+ */
+export function DropOverlay({ folderName, hasSubfolders }: { folderName: string; hasSubfolders?: boolean }) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-accent/10 p-6 backdrop-blur-[2px]">
-      <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-card px-10 py-8 text-center shadow-xl">
-        <UploadCloud className="h-10 w-10 text-accent" aria-hidden />
-        <p className="text-lg font-semibold text-heading">Drop to upload</p>
-        <p className="max-w-xs text-sm text-muted">Your photos and videos will be added to “{folderName}”.</p>
+    <div className="pointer-events-none fixed inset-0 z-50 ring-4 ring-inset ring-accent/40">
+      <div className="absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] flex justify-center px-4">
+        <div className="flex max-w-md items-center gap-3 rounded-full bg-heading px-5 py-3 text-sm text-white shadow-2xl">
+          <UploadCloud className="h-5 w-5 shrink-0" aria-hidden />
+          <span className="min-w-0">
+            Drop to add to <strong className="font-semibold">“{folderName}”</strong>
+            {hasSubfolders ? <span className="opacity-75"> — or onto a folder</span> : null}
+          </span>
+        </div>
       </div>
     </div>
-  );
-}
-
-/** Large drop zone for an empty folder. */
-export function EmptyDropZone({ onFiles }: { onFiles: (files: FileList) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card p-10 text-center transition-colors hover:border-accent hover:bg-accent-subtle/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={SHARED_UPLOAD_ACCEPT}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden
-        onChange={(e) => {
-          if (e.target.files?.length) onFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-subtle text-accent">
-        <UploadCloud className="h-7 w-7" aria-hidden />
-      </span>
-      <span className="text-base font-semibold text-heading">Drag photos and videos here</span>
-      <span className="max-w-sm text-sm text-muted">
-        or <span className="font-medium text-accent underline-offset-2 hover:underline">choose files</span>. JPEG, PNG, WebP, MP4 and MOV.
-      </span>
-    </button>
   );
 }
 
@@ -491,6 +487,7 @@ export function UploadTray({
                 <p className="truncate text-sm text-heading" title={r.file.name}>
                   {r.file.name}
                 </p>
+                {r.folderName ? <p className="truncate text-[11px] text-muted">to {r.folderName}</p> : null}
                 {r.status === "error" ? (
                   <p className="text-xs text-red-600">{r.error}</p>
                 ) : (

@@ -12,7 +12,8 @@ import {
   recordPhotoShareMiss,
 } from "@/lib/public-link-rate-limit";
 import { PhotoShareUnavailable } from "@/components/photos/photo-share-viewer";
-import { LibraryFolderShareViewer, SharedItemViewer } from "@/components/photos/shared-media-viewer";
+import { SharedItemViewer } from "@/components/photos/shared-media-viewer";
+import { LibraryFolderShareViewer } from "@/components/photos/shared-folder-view";
 import { PhotoShareBrand } from "@/app/photo/[token]/brand";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,8 @@ export default async function SharedMediaPage({ params, searchParams }: PageProp
         trail={view.trail}
         subfolders={view.subfolders}
         items={items}
+        cover={view.cover}
+        totalItems={view.totalItems}
         allowDownload={share.allowDownload}
         allowUpload={share.allowUpload}
         allowCreateFolders={share.allowUpload && view.nested}

@@ -23,7 +23,15 @@ import { getAppSettings } from "@/lib/app-settings";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { normalizeStatus } from "@/lib/constants";
 import { effectiveRequireDeliveredForDownloads, resolveProjectDownloadAllowed } from "@/lib/deliverables";
-import { folderPath, folderSubtreeIds, loadFolderTree, loadLibraryFolderMembers } from "@/lib/library-folders";
+import {
+  folderCoverCandidates,
+  folderPath,
+  folderSubtreeIds,
+  loadFolderTree,
+  loadLibraryFolderMembers,
+  loadMembersForFolders,
+  type FolderMemberRow,
+} from "@/lib/library-folders";
 import type { ResolvedMediaShare } from "@/lib/media-shares";
 import { clientMayAccessMediaSection, isMediaSectionVisibleForClient, mediaSectionsFromProject } from "@/lib/project-media-sections";
 import type { SharedMediaItem, SharedMediaKind } from "@/lib/shared-media-types";
@@ -311,16 +319,51 @@ async function sourcesFor(
 /** A folder inside a shared folder's tree, as the anonymous viewer sees it. */
 export type SharedFolderRef = { id: string; name: string };
 
+/**
+ * Cover image for a folder, served through the share like any item: a photo (thumb / preview
+ * variants) or a video's poster.
+ */
+export type SharedFolderCover = { key: string; kind: "photo" | "video" };
+
+export type SharedSubfolder = SharedFolderRef & {
+  cover: SharedFolderCover | null;
+  /** Media directly in the subfolder that this share shows (internal-only items aren't counted). */
+  itemCount: number;
+  subfolderCount: number;
+  /** A few more photo keys from the subfolder for the small preview strip (never the cover). */
+  previews: string[];
+};
+
 export type SharedFolderView = {
   /** The folder being shown: the shared folder itself or one beneath it. */
   folder: SharedFolderRef;
   /** From the shared folder down to `folder` (length 1 at the top). Never shows anything above the share. */
   trail: SharedFolderRef[];
-  subfolders: SharedFolderRef[];
+  subfolders: SharedSubfolder[];
   items: SharedMediaItem[];
+  /** Header image for this folder (its cover, else something inside it). */
+  cover: SharedFolderCover | null;
+  /** Everything this share shows in the folder and all folders beneath it (each item once). */
+  totalItems: number;
   /** Subfolders are supported (v136), so a "Can upload" guest may create folders. */
   nested: boolean;
 };
+
+const PREVIEWS_PER_FOLDER = 2;
+
+function coverOf(src: SharedItemSource | undefined): SharedFolderCover | null {
+  if (!src) return null;
+  if (src.item.kind === "photo" && src.item.hasFile) return { key: src.item.key, kind: "photo" };
+  if (src.item.kind === "video" && src.item.hasPoster) return { key: src.item.key, kind: "video" };
+  return null;
+}
+
+function memberKey(r: FolderMemberRow): string | null {
+  if (r.media_asset_id) return `media:${r.media_asset_id}`;
+  if (r.tour_id) return `tour:${r.tour_id}`;
+  if (r.model_id) return `model:${r.model_id}`;
+  return null;
+}
 
 /**
  * Folders this share opens: the shared folder and everything beneath it (v136), evaluated live
@@ -345,12 +388,141 @@ export async function getSharedFolderView(share: ResolvedMediaShare, folderId: s
   if (!tree.ids.includes(targetId)) return null;
   const trail = folderPath(tree.nodes, targetId, tree.rootId).map((n) => ({ id: n.id, name: n.name }));
   if (!trail.length) trail.push({ id: tree.rootId, name: share.subject.libraryFolder.name });
-  const subfolders = tree.nodes
+  const children = tree.nodes
     .filter((n) => n.parentId === targetId)
     .map((n) => ({ id: n.id, name: n.name }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
-  const items = await listSharedLibraryFolderItems(share, targetId);
-  return { folder: trail[trail.length - 1], trail, subfolders, items, nested: tree.nested };
+
+  // One pass over everything beneath this folder: items, per-subfolder counts and previews,
+  // and fallback covers all come from the same visibility-checked sources.
+  const subtree = folderSubtreeIds(tree.nodes, targetId);
+  const folderOf = new Map<string, string>(); // folder → the child of target it sits under (or target)
+  for (const c of children) for (const id of folderSubtreeIds(tree.nodes, c.id)) folderOf.set(id, c.id);
+  const [rows, covers] = await Promise.all([
+    loadMembersForFolders(share.businessId, subtree.length ? subtree : [targetId]),
+    sharedFolderCovers(share, tree.ids, [targetId, ...children.map((c) => c.id)]),
+  ]);
+  const ids = { media: [] as string[], tour: [] as string[], model: [] as string[] };
+  for (const r of rows) {
+    if (r.media_asset_id) ids.media.push(r.media_asset_id);
+    else if (r.tour_id) ids.tour.push(r.tour_id);
+    else if (r.model_id) ids.model.push(r.model_id);
+  }
+  ids.media = [...new Set(ids.media)];
+  ids.tour = [...new Set(ids.tour)];
+  ids.model = [...new Set(ids.model)];
+  const sources = await sourcesFor(share, ids, true);
+  const byMember = new Map<string, SharedItemSource>();
+  for (const src of sources.values()) {
+    byMember.set(src.item.kind === "tour" ? `tour:${src.id}` : src.item.kind === "model" ? `model:${src.id}` : `media:${src.id}`, src);
+  }
+
+  const items: SharedMediaItem[] = [];
+  const seenTarget = new Set<string>();
+  const seenAll = new Set<string>();
+  const childStats = new Map<string, { direct: Set<string>; previews: string[]; firstCover: SharedFolderCover | null }>();
+  for (const c of children) childStats.set(c.id, { direct: new Set(), previews: [], firstCover: null });
+  let heroFallback: SharedFolderCover | null = null;
+
+  for (const r of rows) {
+    const mk = memberKey(r);
+    const src = mk ? byMember.get(mk) : undefined;
+    if (!mk || !src) continue;
+    seenAll.add(mk);
+    heroFallback ??= coverOf(src);
+    if (r.folder_id === targetId) {
+      if (!seenTarget.has(mk) && items.length < SHARED_FOLDER_MAX_ITEMS) {
+        seenTarget.add(mk);
+        items.push(src.item);
+      }
+      continue;
+    }
+    const childId = folderOf.get(r.folder_id);
+    const stats = childId ? childStats.get(childId) : undefined;
+    if (!stats) continue;
+    stats.firstCover ??= coverOf(src);
+    if (r.folder_id === childId) stats.direct.add(mk);
+  }
+
+  const subfolders: SharedSubfolder[] = children.map((c) => {
+    const stats = childStats.get(c.id)!;
+    const cover = covers.get(c.id) ?? stats.firstCover;
+    // Preview strip: other photos directly in the subfolder, newest first.
+    const previews: string[] = [];
+    for (const r of rows) {
+      if (previews.length >= PREVIEWS_PER_FOLDER) break;
+      if (r.folder_id !== c.id) continue;
+      const mk = memberKey(r);
+      const src = mk ? byMember.get(mk) : undefined;
+      if (src?.item.kind === "photo" && src.item.hasFile && src.item.key !== cover?.key && !previews.includes(src.item.key)) {
+        previews.push(src.item.key);
+      }
+    }
+    return {
+      ...c,
+      cover,
+      itemCount: stats.direct.size,
+      subfolderCount: tree.nodes.filter((n) => n.parentId === c.id).length,
+      previews,
+    };
+  });
+
+  return {
+    folder: trail[trail.length - 1],
+    trail,
+    subfolders,
+    items,
+    cover: covers.get(targetId) ?? heroFallback,
+    totalItems: seenAll.size,
+    nested: tree.nested,
+  };
+}
+
+/**
+ * Covers for subfolder tiles, matching the portal's cards — but only assets this share may
+ * show: a member of the shared tree that passes the same visibility and project rules as the
+ * gallery. A manual cover from outside the share (or an internal-only photo) falls through to
+ * the next candidate, then to the plain folder icon.
+ */
+async function sharedFolderCovers(
+  share: ResolvedMediaShare,
+  treeIds: string[],
+  folderIds: string[]
+): Promise<Map<string, SharedFolderCover>> {
+  const out = new Map<string, SharedFolderCover>();
+  if (!folderIds.length) return out;
+  const candidates = await folderCoverCandidates(share.businessId, folderIds);
+  const assetIds = [...new Set([...candidates.values()].flat())];
+  if (!assetIds.length) return out;
+
+  // Only assets that sit somewhere in the shared tree.
+  const db = await createTenantServiceClient(share.businessId);
+  const inTree = new Set<string>();
+  for (let i = 0; i < treeIds.length; i += IN_CHUNK) {
+    const { data } = await db
+      .from("library_folder_items")
+      .select("media_asset_id")
+      .in("folder_id", treeIds.slice(i, i + IN_CHUNK))
+      .in("media_asset_id", assetIds);
+    for (const r of (data ?? []) as { media_asset_id: string | null }[]) if (r.media_asset_id) inTree.add(r.media_asset_id);
+  }
+  if (!inTree.size) return out;
+
+  const sources = await sourcesFor(share, { media: [...inTree], tour: [], model: [] }, true);
+  const byId = new Map<string, SharedItemSource>();
+  for (const src of sources.values()) byId.set(src.id, src);
+  for (const folderId of folderIds) {
+    for (const id of candidates.get(folderId) ?? []) {
+      const src = byId.get(id);
+      if (!src) continue;
+      const cover = coverOf(src);
+      if (cover) {
+        out.set(folderId, cover);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /** The items one folder of a library-folder share shows right now, newest-added first. */
