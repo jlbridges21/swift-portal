@@ -6,7 +6,16 @@ import { SubscribeButton } from "@/components/billing/billing-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatUsd } from "@/lib/trial-conversion";
-import { introOfferSavingsLabel, type IntervalKey, type IntervalQuote, type OfferDisplay, type OfferKind } from "@/lib/intro-offer";
+import {
+  quoteCompareAtCents,
+  quoteTotalSavingsCents,
+  subscribeSaveLabel,
+  type IntervalKey,
+  type IntervalQuote,
+  type OfferDisplay,
+  type OfferKind,
+  type QuoteSet,
+} from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 /** Legacy display shape (partner promo preview). */
@@ -59,6 +68,7 @@ function IntervalCard({
   plan,
   interval,
   quote,
+  allQuotes,
   highlighted,
   badge,
   promoCode,
@@ -68,6 +78,8 @@ function IntervalCard({
   plan: PlanCard;
   interval: IntervalKey;
   quote: IntervalQuote;
+  /** Both intervals' quotes — annual savings are measured against the monthly price. */
+  allQuotes: QuoteSet;
   highlighted: boolean;
   badge: string | null;
   promoCode: string | null;
@@ -75,6 +87,7 @@ function IntervalCard({
   context: string;
 }) {
   const discounted = quote.savingsCents > 0;
+  const totalSavings = quoteTotalSavingsCents(quote, allQuotes);
   const productName = plan.name === "Studio" ? "ShootPortal" : plan.name;
   const label = interval === "annual" ? "Annual" : "Monthly";
   return (
@@ -88,8 +101,10 @@ function IntervalCard({
         <div>
           <p className="text-sm font-semibold text-heading">{label}</p>
           <p className="mt-1 text-3xl font-bold text-heading">
-            {discounted ? (
-              <span className="mr-2 text-base font-normal text-muted line-through">{formatUsd(quote.regularCents)}</span>
+            {totalSavings > 0 ? (
+              <span className="mr-2 text-base font-normal text-muted line-through">
+                {formatUsd(quoteCompareAtCents(quote, allQuotes))}
+              </span>
             ) : null}
             {formatUsd(quote.firstChargeCents)}
             <span className="text-sm font-normal text-muted">
@@ -103,8 +118,8 @@ function IntervalCard({
                 ? "Billed monthly"
                 : `Billed once a year · ${formatUsd(Math.round(quote.regularCents / 12))}/month equivalent`}
           </p>
-          {discounted ? (
-            <p className="mt-1 text-sm font-medium text-emerald-700">You save {formatUsd(quote.savingsCents)}</p>
+          {totalSavings > 0 ? (
+            <p className="mt-1 text-sm font-medium text-emerald-700">You save {formatUsd(totalSavings)}</p>
           ) : null}
           <dl className="mt-3 space-y-1 rounded-lg bg-background px-3 py-2 text-xs text-muted">
             <div className="flex justify-between gap-2">
@@ -161,7 +176,7 @@ export function BillingPlansWithPromo({
   const primaryPlan = plans[0];
   // A partner code replaces Subscribe & Save — never both.
   const effectiveKind: OfferKind = promo.promoCode && promo.quotes ? "referral" : offerKind;
-  const save = introOfferSavingsLabel();
+  const save = subscribeSaveLabel(primaryPlan?.quotes);
 
   const cards = useMemo(
     () =>
@@ -186,7 +201,7 @@ export function BillingPlansWithPromo({
         const badgeFor = (q: IntervalQuote | undefined, fallback: string | null) =>
           q && q.savingsCents > 0
             ? effectiveKind === "intro"
-              ? `Save ${formatUsd(q.savingsCents)}`
+              ? `Save ${formatUsd(quoteTotalSavingsCents(q, quotes))}`
               : `Partner discount`
             : fallback;
         return (
@@ -195,6 +210,7 @@ export function BillingPlansWithPromo({
               plan={plan}
               interval="monthly"
               quote={quotes.monthly}
+              allQuotes={quotes}
               highlighted={preferredInterval === "monthly"}
               badge={badgeFor(quotes.monthly, null)}
               promoCode={promo.promoCode}
@@ -206,6 +222,7 @@ export function BillingPlansWithPromo({
                 plan={plan}
                 interval="annual"
                 quote={quotes.annual}
+                allQuotes={quotes}
                 highlighted={preferredInterval !== "monthly"}
                 badge={badgeFor(quotes.annual, "Best Value")}
                 promoCode={promo.promoCode}

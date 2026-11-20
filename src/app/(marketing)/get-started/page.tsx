@@ -10,7 +10,7 @@ import { marketingPageMetadata } from "@/lib/marketing";
 import { assertActivePlanKey, FALLBACK_TRIAL_DAYS, resolvePlanTrialDays } from "@/lib/entitlements";
 import { parseSignupSource, signupHref } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
-import { introOfferSavingsLabel, quoteInterval } from "@/lib/intro-offer";
+import { quoteCompareAtCents, quoteInterval, quoteTotalSavingsCents, subscribeSaveLabel } from "@/lib/intro-offer";
 
 /**
  * Post-demo subscription page. Shared after a live demo (e.g. /get-started?source=demo).
@@ -58,7 +58,10 @@ export default async function GetStartedPage({
   // Subscribe & Save prices for new customers (partner referrals see their own pricing at signup).
   const monthlyIntro = monthlyCents != null ? quoteInterval("monthly", monthlyCents, true) : null;
   const annualIntro = annualTotal != null ? quoteInterval("annual", annualTotal, true) : null;
-  const save = introOfferSavingsLabel();
+  // Savings vs. paying monthly: annual $348 − $263 = $85, monthly $15.
+  const introQuotes = { monthly: monthlyIntro ?? undefined, annual: annualIntro ?? undefined };
+  const save = subscribeSaveLabel(introQuotes);
+  const annualSavings = annualIntro ? quoteTotalSavingsCents(annualIntro, introQuotes) : 0;
 
   return (
     <BrandProvider brand={platformPortalBrand()}>
@@ -120,8 +123,10 @@ export default async function GetStartedPage({
                 </span>
                 <h2 className="text-lg font-semibold text-[#0F172A]">Annual</h2>
                 <p className="mt-4 flex items-baseline gap-1">
-                  {annualIntro && annualIntro.savingsCents > 0 ? (
-                    <span className="mr-1 text-lg text-[#94A3B8] line-through">{formatUsd(annualTotal)}</span>
+                  {annualIntro && annualSavings > 0 ? (
+                    <span className="mr-1 text-lg text-[#94A3B8] line-through">
+                      {formatUsd(quoteCompareAtCents(annualIntro, introQuotes))}
+                    </span>
                   ) : null}
                   <span className="text-4xl font-bold tracking-tight text-[#0F172A]">
                     {formatUsd(annualIntro?.firstChargeCents ?? annualTotal)}
@@ -130,7 +135,7 @@ export default async function GetStartedPage({
                 </p>
                 <p className="mt-1 text-sm text-[#475569]">
                   {annualIntro && annualIntro.savingsCents > 0
-                    ? `Then ${formatUsd(annualTotal)}/year · save ${formatUsd(annualIntro.savingsCents)}`
+                    ? `${formatUsd(annualPerMonthCents)}/mo billed yearly + ${formatUsd(annualIntro.savingsCents)} off today · save ${formatUsd(annualSavings)}`
                     : `Equivalent to ${formatUsd(annualPerMonthCents)}/month · ${formatUsd(annualTotal)} billed once a year`}
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5">

@@ -20,7 +20,14 @@ import {
   type SignupInterval,
 } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
-import { introOfferSavingsLabel, quotePlan, type OfferDisplay } from "@/lib/intro-offer";
+import {
+  quoteCompareAtCents,
+  quotePlan,
+  quoteTotalSavingsCents,
+  subscribeSaveLabel,
+  type IntervalQuote,
+  type OfferDisplay,
+} from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_INTENT: SignupIntent = { path: "trial", interval: null, source: null };
@@ -57,7 +64,10 @@ export function SignupForm({
   const subscribing = intent.path === "subscribe" || trialDays <= 0;
   const offerKind = offer?.kind ?? "intro";
   const quotes = offer?.quotes ?? (pricing ? quotePlan(pricing, true) : {});
-  const save = introOfferSavingsLabel();
+  // Savings vs. paying monthly: annual $348 − $263 = $85, monthly $15.
+  const annualListCents = (q: IntervalQuote) => quoteCompareAtCents(q, quotes);
+  const totalSavingsCents = (q: IntervalQuote) => quoteTotalSavingsCents(q, quotes);
+  const save = subscribeSaveLabel(quotes);
   const selectedQuote = quotes[intent.interval === "monthly" ? "monthly" : "annual"] ?? null;
   const referralHasDiscount = Object.values(quotes).some((q) => (q?.savingsCents ?? 0) > 0);
 
@@ -318,7 +328,14 @@ export function SignupForm({
                 </span>
                 <span className="mt-1 text-sm text-muted">
                   {offerKind === "intro"
-                    ? `Ready to get started? Subscribe today and save ${save}.`
+                    ? quotes.monthly && quotes.annual
+                      ? <>
+                          Subscribe today and save{" "}
+                          <strong className="text-emerald-700">{formatUsd(totalSavingsCents(quotes.annual))}</strong> on
+                          annual or <strong className="text-emerald-700">{formatUsd(totalSavingsCents(quotes.monthly))}</strong>{" "}
+                          on monthly.
+                        </>
+                      : `Ready to get started? Subscribe today and save ${save}.`
                     : offerKind === "referral" && referralHasDiscount
                       ? `Subscribe today with your ${offer?.partnerName ? `${offer.partnerName} ` : ""}partner discount.`
                       : "Ready to get started? Subscribe today."}
@@ -332,6 +349,8 @@ export function SignupForm({
                   {(["monthly", "annual"] as const).map((option) => {
                     const q = quotes[option];
                     const discounted = q && q.savingsCents > 0;
+                    const total = q ? totalSavingsCents(q) : 0;
+                    const listCents = q ? (option === "annual" ? annualListCents(q) : q.regularCents) : 0;
                     return (
                       <button
                         key={option}
@@ -353,9 +372,9 @@ export function SignupForm({
                         {q ? (
                           <>
                             <span className="mt-1 text-lg font-bold text-heading">
-                              {discounted && (
+                              {total > 0 && (
                                 <span className="mr-1.5 text-sm font-normal text-muted line-through">
-                                  {formatUsd(q.regularCents)}
+                                  {formatUsd(listCents)}
                                 </span>
                               )}
                               {formatUsd(q.firstChargeCents)}
@@ -367,11 +386,16 @@ export function SignupForm({
                               {discounted
                                 ? option === "monthly"
                                   ? `for ${q.introInvoices} months, then ${formatUsd(q.regularCents)}/mo`
-                                  : `then ${formatUsd(q.regularCents)}/year`
+                                  : `${formatUsd(Math.round(q.regularCents / 12))}/mo billed yearly + ${formatUsd(q.savingsCents)} off today`
                                 : option === "monthly"
                                   ? "Billed monthly"
-                                  : "Billed once a year"}
+                                  : `${formatUsd(Math.round(q.regularCents / 12))}/mo billed yearly`}
                             </span>
+                            {total > 0 && (
+                              <span className="mt-1.5 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-px text-xs font-semibold text-emerald-700">
+                                Save {formatUsd(total)}
+                              </span>
+                            )}
                           </>
                         ) : (
                           <span className="text-xs">{option === "monthly" ? "Billed monthly" : "Billed annually"}</span>
@@ -382,11 +406,15 @@ export function SignupForm({
                 </div>
                 {selectedQuote && (
                   <p className="mt-3 rounded-lg bg-background px-3 py-2 text-center text-xs text-muted">
-                    You&apos;ll pay <strong className="text-heading">{formatUsd(selectedQuote.firstChargeCents)} today</strong>{" "}
-                    on the next step.{" "}
-                    {selectedQuote.interval === "annual" ? selectedQuote.renewal : `${selectedQuote.summary}`}.
-                    {selectedQuote.savingsCents > 0 ? ` You save ${formatUsd(selectedQuote.savingsCents)}.` : ""} Cancel
-                    anytime.
+                    You&apos;ll pay <strong className="text-heading">{formatUsd(selectedQuote.firstChargeCents)} today</strong>
+                    {totalSavingsCents(selectedQuote) > 0 && (
+                      <>
+                        {" · "}
+                        <strong className="text-emerald-700">You save {formatUsd(totalSavingsCents(selectedQuote))}</strong>
+                      </>
+                    )}
+                    <br />
+                    {selectedQuote.interval === "annual" ? selectedQuote.renewal : selectedQuote.summary}. Cancel anytime.
                   </p>
                 )}
               </div>

@@ -190,6 +190,51 @@ export function quotePlan(pricing: PlanPricing, withIntro: boolean): Partial<Rec
 }
 
 // ---------------------------------------------------------------------------
+// Savings vs. paying monthly (customer-facing copy)
+// ---------------------------------------------------------------------------
+
+export type QuoteSet = Partial<Record<IntervalKey, IntervalQuote>>;
+
+/**
+ * What this period would cost at the regular monthly price. Annual: monthly × 12 ($29 × 12 = $348)
+ * when that beats the annual list price; otherwise the quote's own regular price.
+ */
+export function quoteCompareAtCents(q: IntervalQuote, quotes: QuoteSet): number {
+  if (q.interval !== "annual") return q.regularCents;
+  const monthly = quotes.monthly?.regularCents;
+  return monthly != null && monthly * 12 > q.regularCents ? monthly * 12 : q.regularCents;
+}
+
+/**
+ * Total first-term savings shown to customers. Monthly: the intro discount ($5 × 3 = $15).
+ * Annual: compare-at minus today's charge ($348 − $263 = $85), i.e. the annual-plan discount
+ * plus the intro coupon. Display only — checkout and coupons use `savingsCents`.
+ */
+export function quoteTotalSavingsCents(q: IntervalQuote, quotes: QuoteSet): number {
+  return q.interval === "annual" ? Math.max(0, quoteCompareAtCents(q, quotes) - q.firstChargeCents) : q.savingsCents;
+}
+
+/**
+ * Subscribe & Save headline from real quotes: "up to $85" (or "$85" when every interval saves the
+ * same). With an interval, that interval's total. Falls back to the coupon-only label without quotes.
+ */
+export function subscribeSaveLabel(quotes: QuoteSet | null | undefined, interval?: IntervalKey): string {
+  if (quotes && interval) {
+    const q = quotes[interval];
+    return q ? formatUsd(quoteTotalSavingsCents(q, quotes)) : introOfferSavingsLabel(interval);
+  }
+  const totals = quotes
+    ? Object.values(quotes)
+        .filter((q): q is IntervalQuote => q != null)
+        .map((q) => quoteTotalSavingsCents(q, quotes))
+        .filter((c) => c > 0)
+    : [];
+  if (totals.length === 0) return introOfferSavingsLabel(interval);
+  const max = Math.max(...totals);
+  return totals.every((c) => c === max) ? formatUsd(max) : `up to ${formatUsd(max)}`;
+}
+
+// ---------------------------------------------------------------------------
 // Eligibility window + decision
 // ---------------------------------------------------------------------------
 

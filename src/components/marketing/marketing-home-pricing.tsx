@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { signupHref } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
-import { introOfferSavingsLabel, quoteInterval } from "@/lib/intro-offer";
+import { quotePlan, quoteInterval, subscribeSaveLabel } from "@/lib/intro-offer";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -39,6 +39,11 @@ export function MarketingHomePricing({
   const monthlyLabel = formatPlanPrice(monthlyCents);
   const annualMonthlyLabel = formatPlanPrice(annualMonthlyCents);
   const savingsLabel = formatAnnualSavingsLabel(monthlyCents, annualMonthlyCents);
+  // Subscribe & Save vs. paying monthly: annual $85, monthly $15.
+  const introQuotes = quotePlan(
+    { monthlyCents: monthlyCents ?? null, annualPerMonthCents: annualMonthlyCents ?? null },
+    true
+  );
   const planName = plan?.name ?? "Studio";
   const description = plan?.description?.trim() || STUDIO_DESCRIPTION;
 
@@ -155,7 +160,7 @@ export function MarketingHomePricing({
                 variant="outline"
                 className="min-h-12 w-full border-[#4F46E5] bg-white text-base font-semibold text-[#4F46E5] hover:bg-[#EEF2FF]"
               >
-                Subscribe &amp; Save {introOfferSavingsLabel(interval)}
+                Subscribe &amp; Save {subscribeSaveLabel(introQuotes, interval)}
               </Button>
             </Link>
             <p className="mt-2 text-center text-xs text-[#475569]">
