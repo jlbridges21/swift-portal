@@ -20,7 +20,7 @@ import { loadTrialUiContext } from "@/lib/billing-journey";
 import { decideTrialModal, formatBillingDate, getScheduledPlan, trialModalCopy } from "@/lib/trial-conversion";
 import { assertActivePlanKey, resolvePlanTrialDays } from "@/lib/entitlements";
 import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
-import { introOfferSavingsLabel, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
+import { requestNowMs, subscribeSaveLabel, type OfferDisplay } from "@/lib/intro-offer";
 import type { Metadata, Viewport } from "next";
 import { appChromeThemeColor } from "@/lib/pwa/metadata";
 import { getUiExperience } from "@/lib/ui-rollout-server";
@@ -139,7 +139,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             decision.milestone,
             decision.msRemaining,
             resolvePlanTrialDays(plan, "trial_modal"),
-            introOffer ? introOfferSavingsLabel() : null
+            introOffer ? subscribeSaveLabel(offer?.quotes) : null
           )}
           offer={offer}
           planKey={plan.key}

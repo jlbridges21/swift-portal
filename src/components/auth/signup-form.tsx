@@ -20,7 +20,14 @@ import {
   type SignupInterval,
 } from "@/lib/signup-intent";
 import { formatUsd } from "@/lib/trial-conversion";
-import { introOfferSavingsLabel, quotePlan, type IntervalQuote, type OfferDisplay } from "@/lib/intro-offer";
+import {
+  quoteCompareAtCents,
+  quotePlan,
+  quoteTotalSavingsCents,
+  subscribeSaveLabel,
+  type IntervalQuote,
+  type OfferDisplay,
+} from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_INTENT: SignupIntent = { path: "trial", interval: null, source: null };
@@ -57,18 +64,10 @@ export function SignupForm({
   const subscribing = intent.path === "subscribe" || trialDays <= 0;
   const offerKind = offer?.kind ?? "intro";
   const quotes = offer?.quotes ?? (pricing ? quotePlan(pricing, true) : {});
-  // Savings vs. paying the regular monthly price. Annual counts the annual-plan discount too:
-  // $29 × 12 = $348 list, minus the $263 first year = $85. Monthly is just the intro discount.
-  const monthlyRegularCents = quotes.monthly?.regularCents ?? null;
-  const annualListCents = (q: IntervalQuote) =>
-    monthlyRegularCents != null && monthlyRegularCents * 12 > q.regularCents ? monthlyRegularCents * 12 : q.regularCents;
-  const totalSavingsCents = (q: IntervalQuote) =>
-    q.interval === "annual" ? annualListCents(q) - q.firstChargeCents : q.savingsCents;
-  const maxSavingsCents = Math.max(
-    0,
-    ...Object.values(quotes).map((q) => (q ? totalSavingsCents(q) : 0))
-  );
-  const save = maxSavingsCents > 0 ? `up to ${formatUsd(maxSavingsCents)}` : introOfferSavingsLabel();
+  // Savings vs. paying monthly: annual $348 − $263 = $85, monthly $15.
+  const annualListCents = (q: IntervalQuote) => quoteCompareAtCents(q, quotes);
+  const totalSavingsCents = (q: IntervalQuote) => quoteTotalSavingsCents(q, quotes);
+  const save = subscribeSaveLabel(quotes);
   const selectedQuote = quotes[intent.interval === "monthly" ? "monthly" : "annual"] ?? null;
   const referralHasDiscount = Object.values(quotes).some((q) => (q?.savingsCents ?? 0) > 0);
 

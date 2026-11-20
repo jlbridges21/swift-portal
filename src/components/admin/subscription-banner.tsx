@@ -6,6 +6,7 @@ import {
   introCountdownLabel,
   introOfferPromptCopy,
   introOfferSavingsLabel,
+  subscribeSaveLabel,
   type IntervalQuote,
   type OfferDisplay,
 } from "@/lib/intro-offer";
@@ -172,7 +173,7 @@ function TrialOfferBanner({
   }
 
   const urgent = kind === "intro" ? introOfferPromptCopy(introMs).urgent : days <= 3;
-  const save = kind === "intro" ? introOfferSavingsLabel() : null;
+  const save = kind === "intro" ? subscribeSaveLabel(offer?.quotes) : null;
   const countdown = kind === "intro" ? introCountdownLabel(introMs) : dayLabel;
   const prices = discounted.map((q) => shortPrice(q)).join(" or ");
 

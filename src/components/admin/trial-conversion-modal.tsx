@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { formatUsd, isCalmAdminPath, type TrialMilestone, type TrialModalCopy } from "@/lib/trial-conversion";
-import type { OfferDisplay } from "@/lib/intro-offer";
+import { quoteCompareAtCents, type OfferDisplay } from "@/lib/intro-offer";
 import { cn } from "@/lib/utils";
 
 /** One trial modal per browser session, across tabs of the same session storage. */
@@ -153,7 +153,8 @@ export function TrialConversionModal({
           {
             key: "annual" as const,
             title: "Annual",
-            was: aq && aq.savingsCents > 0 ? `${formatUsd(aq.regularCents)}` : null,
+            // Compare against a year at the monthly price ($348), not the annual list price.
+            was: aq && aq.savingsCents > 0 && offer ? `${formatUsd(quoteCompareAtCents(aq, offer.quotes))}` : null,
             price: aq && aq.savingsCents > 0 ? `${formatUsd(aq.firstChargeCents)} first year` : `${formatUsd(annualTotal)}/year`,
             note:
               aq && aq.savingsCents > 0

@@ -21,7 +21,7 @@ import {
   StartTrialInsteadButton,
 } from "@/components/billing/billing-actions";
 import { offerDisplayForBusiness } from "@/lib/intro-offer-server";
-import { introCountdownLabel, introOfferSavingsLabel, quotePlan, requestNowMs, type OfferDisplay } from "@/lib/intro-offer";
+import { introCountdownLabel, quotePlan, requestNowMs, subscribeSaveLabel, type OfferDisplay } from "@/lib/intro-offer";
 import { BillingPlansWithPromo } from "@/components/billing/billing-plans-with-promo";
 import {
   customerIdForMode,
@@ -180,7 +180,8 @@ export default async function BillingPage({
   }
   const introMsLeft = introEndsAt ? new Date(introEndsAt).getTime() - requestNowMs() : 0;
   const introLive = offerKind === "intro" && introMsLeft > 0;
-  const save = introOfferSavingsLabel();
+  // "up to $85": annual savings vs. paying monthly for a year, plus the intro coupon.
+  const save = subscribeSaveLabel(offersByPlan.values().next().value?.quotes);
   const trialRunning = sub.status === "trialing" && !sub.isExpired;
 
   let scheduledChargeCents: number | null = null;
