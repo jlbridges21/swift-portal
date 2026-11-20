@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Folder, FolderPlus, ImageIcon, Loader2, Play, Search, Sparkles } from "lucide-react";
+import { Check, Folder, FolderPlus, FolderUp, ImageIcon, Loader2, Play, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import type { LibraryAsset } from "@/lib/media-library";
 import {
   LIBRARY_FOLDER_NAME_MAX,
   folderItemCountLabel,
+  libraryFolderDescendants,
+  libraryFolderPathName,
   normalizeLibraryFolderName,
   type LibraryFolderSummary,
 } from "@/lib/library-folder-types";
@@ -22,12 +24,15 @@ export function FolderNameDialog({
   open,
   mode,
   initialName = "",
+  parentName = null,
   onClose,
   onSubmit,
 }: {
   open: boolean;
   mode: "create" | "rename";
   initialName?: string;
+  /** Creating a subfolder (v136): the folder it goes in. */
+  parentName?: string | null;
   onClose: () => void;
   onSubmit: (name: string) => Promise<string | null>;
 }) {
@@ -61,7 +66,7 @@ export function FolderNameDialog({
     <Modal
       open={open}
       onClose={busy ? () => {} : onClose}
-      title={mode === "create" ? "New folder" : "Rename folder"}
+      title={mode === "rename" ? "Rename folder" : parentName ? `New folder in “${parentName}”` : "New folder"}
       className="sm:max-w-md"
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -481,6 +486,117 @@ export function CoverPickerDialog({
           </ul>
         )}
         {items && items.length >= COVER_PAGE ? <p className="text-xs text-muted">Showing the first {COVER_PAGE}. Search to find a specific photo or video.</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Move a folder (with everything in it) into another folder, or back to the top level (v136).
+ * The folder itself and its own subfolders aren't offered — that would make a loop.
+ * `onMove` resolves to an error message, or null on success.
+ */
+export function MoveFolderDialog({
+  open,
+  folder,
+  folders,
+  onClose,
+  onMove,
+}: {
+  open: boolean;
+  folder: LibraryFolderSummary | null;
+  /** Every folder in the business (with parentId). */
+  folders: LibraryFolderSummary[];
+  onClose: () => void;
+  onMove: (parentId: string | null) => Promise<string | null>;
+}) {
+  const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setBusyId(null);
+      setError(null);
+    }
+  }, [open]);
+
+  const options = useMemo(() => {
+    if (!folder) return [];
+    const blocked = new Set([folder.id, ...libraryFolderDescendants(folders, folder.id).map((f) => f.id)]);
+    const q = query.trim().toLowerCase();
+    return folders
+      .filter((f) => !blocked.has(f.id))
+      .map((f) => ({ id: f.id, path: libraryFolderPathName(folders, f.id), name: f.name }))
+      .filter((f) => !q || f.path.toLowerCase().includes(q))
+      .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base", numeric: true }));
+  }, [folder, folders, query]);
+
+  const currentParent = folder?.parentId ?? null;
+
+  async function move(parentId: string | null) {
+    if (parentId === currentParent) return;
+    setBusyId(parentId ?? "__top__");
+    setError(null);
+    const err = await onMove(parentId);
+    setBusyId(null);
+    if (err) setError(err);
+  }
+
+  const busy = busyId !== null;
+  const row = (id: string | null, label: string, sub: string | null, icon: React.ReactNode) => {
+    const current = id === currentParent;
+    return (
+      <li key={id ?? "__top__"}>
+        <button
+          type="button"
+          disabled={busy || current}
+          onClick={() => void move(id)}
+          className="flex min-h-14 w-full min-w-0 items-center gap-3 px-3 py-2 text-left hover:bg-subtle disabled:cursor-default disabled:hover:bg-transparent"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent">{icon}</span>
+          <span className="min-w-0 flex-1">
+            <span className={cn("block truncate text-sm font-medium", current ? "text-muted" : "text-heading")} title={label}>
+              {label}
+            </span>
+            {current ? <span className="block text-xs text-muted">Current location</span> : sub ? <span className="block truncate text-xs text-muted">{sub}</span> : null}
+          </span>
+          {busyId === (id ?? "__top__") ? <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden /> : null}
+        </button>
+      </li>
+    );
+  };
+
+  return (
+    <Modal open={open} onClose={busy ? () => {} : onClose} title={`Move “${folder?.name ?? ""}”`} className="sm:max-w-md">
+      <div className="space-y-3">
+        <p className="text-sm text-muted">
+          Everything inside moves with it. Shares of this folder keep working; it also shows up in shares of the folder you move it into.
+        </p>
+        {folders.length > 6 ? (
+          <label className="relative block">
+            <span className="sr-only">Search folders</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search folders…"
+              className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </label>
+        ) : null}
+        <ul className="max-h-[45vh] divide-y divide-border overflow-y-auto rounded-xl border border-border">
+          {!query.trim() ? row(null, "Folders (top level)", "Not inside any folder", <FolderUp className="h-4 w-4" aria-hidden />) : null}
+          {options.map((o) => row(o.id, o.name, o.path !== o.name ? o.path : null, <Folder className="h-4 w-4" aria-hidden />))}
+          {options.length === 0 && query.trim() ? <li className="px-4 py-6 text-center text-sm text-muted">No folders match.</li> : null}
+        </ul>
+        {error ? (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        ) : null}
       </div>
     </Modal>
   );

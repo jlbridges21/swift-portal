@@ -11,9 +11,11 @@ import {
   ChevronRight,
   Folder,
   FolderOpen,
+  FolderInput,
   FolderPlus,
   ImageIcon,
   ImagePlus,
+  Images,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -29,7 +31,11 @@ import { usePhotoShareDialog } from "@/components/photos/photo-share-dialog";
 import type { LibraryAsset, LibraryAssetKind } from "@/lib/media-library";
 import {
   LIBRARY_FOLDER_SORT_OPTIONS,
+  folderContentsLabel,
   folderItemCountLabel,
+  libraryFolderDescendants,
+  libraryFolderPathName,
+  libraryFolderTrail,
   sortLibraryFolders,
   type LibraryFolderSort,
   type LibraryFolderSummary,
@@ -37,7 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AssetBrowser, type LibraryFilterOptions } from "@/components/admin/media-library/asset-browser";
 import { FolderGalleryCard, FolderListRow, FolderStripCard, folderHref } from "@/components/admin/media-library/folder-cards";
-import { CoverPickerDialog, FolderNameDialog } from "@/components/admin/media-library/folder-dialogs";
+import { CoverPickerDialog, FolderNameDialog, MoveFolderDialog } from "@/components/admin/media-library/folder-dialogs";
 import { LibrarySearch } from "@/components/admin/media-library/library-filters";
 import { ViewModeToggle, shortDate, useStoredViewMode, useThumbUrls } from "@/components/admin/media-library/library-ui";
 import {
@@ -59,6 +65,8 @@ export type MediaLibraryWorkspaceProps = {
   view: MediaLibraryView;
   initialFolders: LibraryFolderSummary[];
   foldersSetupRequired: boolean;
+  /** Migration v136 applied: folders can hold folders. */
+  subfoldersSupported?: boolean;
   /** Unfiltered library size for the All Media tab (null = load lazily). */
   libraryTotal: number | null;
   folder?: { id: string; name: string } | null;
@@ -101,6 +109,7 @@ export function MediaLibraryWorkspace({
   view,
   initialFolders,
   foldersSetupRequired,
+  subfoldersSupported: initialSubfoldersSupported = false,
   libraryTotal: initialLibraryTotal,
   folder: initialFolder = null,
   browser,
@@ -112,14 +121,18 @@ export function MediaLibraryWorkspace({
   const router = useRouter();
   const [folders, setFolders] = useState(initialFolders);
   const [setupRequired, setSetupRequired] = useState(foldersSetupRequired);
+  const [subfoldersSupported, setSubfoldersSupported] = useState(initialSubfoldersSupported);
   const [libraryTotal, setLibraryTotal] = useState<number | null>(initialLibraryTotal);
   const [currentFolder, setCurrentFolder] = useState(initialFolder);
   const [uploadOpen, setUploadOpen] = useState(openUploadOnMount);
   const [reloadSignal, setReloadSignal] = useState(0);
-  const [nameDialog, setNameDialog] = useState<{ mode: "create" } | { mode: "rename"; folder: LibraryFolderSummary } | null>(null);
+  const [nameDialog, setNameDialog] = useState<
+    { mode: "create"; parent?: { id: string; name: string } | null } | { mode: "rename"; folder: LibraryFolderSummary } | null
+  >(null);
   const [deleting, setDeleting] = useState<LibraryFolderSummary | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [coverFor, setCoverFor] = useState<LibraryFolderSummary | null>(null);
+  const [moving, setMoving] = useState<LibraryFolderSummary | null>(null);
   const [menu, setMenu] = useState<{ folder: LibraryFolderSummary; anchor: ActionMenuAnchor } | null>(null);
   const [folderSort, setFolderSort] = useState<LibraryFolderSort>("name_asc");
   const [folderQuery, setFolderQuery] = useState("");
@@ -136,6 +149,7 @@ export function MediaLibraryWorkspace({
       .then((r) => {
         setFolders(r.folders);
         setSetupRequired(r.setupRequired);
+        if (typeof r.subfoldersSupported === "boolean") setSubfoldersSupported(r.subfoldersSupported);
       })
       .catch(() => {});
   }, []);
@@ -152,12 +166,28 @@ export function MediaLibraryWorkspace({
   }, [libraryTotal]);
 
   const folderSummary = currentFolder ? folders.find((f) => f.id === currentFolder.id) ?? null : null;
+  // v136 subfolders: the top level shows only root folders; each folder shows its children.
+  const rootFolders = useMemo(() => folders.filter((f) => !f.parentId), [folders]);
+  const childFolders = useMemo(
+    () => (currentFolder ? sortLibraryFolders(folders.filter((f) => f.parentId === currentFolder.id), "name_asc") : []),
+    [folders, currentFolder]
+  );
+  const trail = useMemo(() => (currentFolder ? libraryFolderTrail(folders, currentFolder.id) : []), [folders, currentFolder]);
+  /** A folder above this one is shared, so this one is too. */
+  const sharedVia = trail.slice(0, -1).reverse().find((f) => f.share.link || f.share.people > 0) ?? null;
+  /** Pickers list every folder by its path ("Clients / Smith / Raw"). */
+  const pathFolders = useMemo(
+    () => folders.map((f) => (f.parentId ? { ...f, name: libraryFolderPathName(folders, f.id) } : f)),
+    [folders]
+  );
+  const createFolderIn = (parent: { id: string; name: string } | null) =>
+    setNameDialog({ mode: "create", parent: parent && subfoldersSupported ? parent : null });
   // Covers (photo, or a video's existing poster) for both the strip and the Folders tab. A
   // manual cover whose thumbnail can't load (deleted, processing, no access) falls back to the
   // automatic cover, then to the folder icon.
   const coverIds = useMemo(
-    () => (view === "folder" ? [] : folders.flatMap((f) => [f.coverAssetId, f.autoCoverAssetId])),
-    [folders, view]
+    () => (view === "folder" ? childFolders : folders).flatMap((f) => [f.coverAssetId, f.autoCoverAssetId]),
+    [folders, childFolders, view]
   );
   const covers = useThumbUrls(coverIds);
   const coverUrlFor = (f: LibraryFolderSummary): string | null =>
@@ -178,6 +208,8 @@ export function MediaLibraryWorkspace({
     }
   }
 
+  const deletingSubfolders = deleting ? libraryFolderDescendants(folders, deleting.id).length : 0;
+
   async function confirmDelete() {
     if (!deleting) return;
     setDeleteBusy(true);
@@ -188,10 +220,14 @@ export function MediaLibraryWorkspace({
       return;
     }
     toast.success(`Deleted folder “${deleting.name}”. Its media is still in your library.`);
-    setFolders((prev) => prev.filter((f) => f.id !== deleting.id));
-    const wasCurrent = currentFolder?.id === deleting.id;
+    // Subfolders go with it (the database cascades).
+    const gone = new Set([deleting.id, ...libraryFolderDescendants(folders, deleting.id).map((f) => f.id)]);
+    setFolders((prev) => prev.filter((f) => !gone.has(f.id)));
+    const wasCurrent = currentFolder ? gone.has(currentFolder.id) : false;
+    const parentId = deleting.parentId;
     setDeleting(null);
-    if (wasCurrent) router.push("/admin/media/folders");
+    if (wasCurrent) router.push(parentId ? folderHref(parentId) : "/admin/media/folders");
+    else if (currentFolder) refreshFolders();
   }
 
   const folderMenuItems: ActionMenuItem[] = menu
@@ -202,9 +238,17 @@ export function MediaLibraryWorkspace({
           : []),
         ...(permissions.organize
           ? ([
+              ...(subfoldersSupported
+                ? ([
+                    { id: "subfolder", label: "New folder inside", icon: FolderPlus, onSelect: () => createFolderIn(menu.folder) },
+                  ] satisfies ActionMenuItem[])
+                : []),
               { id: "rename", label: "Rename", icon: Pencil, onSelect: () => setNameDialog({ mode: "rename", folder: menu.folder }) },
+              ...(subfoldersSupported
+                ? ([{ id: "move", label: "Move to…", icon: FolderInput, onSelect: () => setMoving(menu.folder) }] satisfies ActionMenuItem[])
+                : []),
               { id: "cover", label: "Change cover", icon: ImagePlus, onSelect: () => setCoverFor(menu.folder) },
-              { id: "add", label: "Add from library", icon: FolderPlus, onSelect: () => router.push(`/admin/media?addTo=${menu.folder.id}`) },
+              { id: "add", label: "Add from library", icon: Images, onSelect: () => router.push(`/admin/media?addTo=${menu.folder.id}`) },
             ] satisfies ActionMenuItem[])
           : []),
         ...(permissions.deleteFolders
@@ -225,9 +269,15 @@ export function MediaLibraryWorkspace({
 
   const visibleFolders = useMemo(() => {
     const q = folderQuery.trim().toLowerCase();
-    return sortLibraryFolders(q ? folders.filter((f) => f.name.toLowerCase().includes(q)) : folders, folderSort);
-  }, [folders, folderQuery, folderSort]);
-  const stripFolders = useMemo(() => sortLibraryFolders(folders, "updated").slice(0, STRIP_MAX), [folders]);
+    // Searching looks through every folder (shown with its path); otherwise only the top level.
+    if (!q) return sortLibraryFolders(rootFolders, folderSort);
+    const byId = new Map(pathFolders.map((f) => [f.id, f]));
+    return sortLibraryFolders(
+      folders.filter((f) => f.name.toLowerCase().includes(q)).map((f) => byId.get(f.id) ?? f),
+      folderSort
+    );
+  }, [folders, rootFolders, pathFolders, folderQuery, folderSort]);
+  const stripFolders = useMemo(() => sortLibraryFolders(rootFolders, "updated").slice(0, STRIP_MAX), [rootFolders]);
   const stripRef = useRef<HTMLDivElement>(null);
   const scrollStrip = (dir: 1 | -1) => {
     const el = stripRef.current;
@@ -235,12 +285,12 @@ export function MediaLibraryWorkspace({
   };
 
   // All Media: folders as one compact, horizontally scrolling row under the filters.
-  const scrollable = folders.length > 3;
+  const scrollable = rootFolders.length > 3;
 
   // All Media: "Folders" heading + compact cover-preview cards in one horizontal row, ending with
   // a dashed "Create Folder" card. With no folders, only that card shows (no empty row).
   const folderStrip =
-    view === "all" && foldersReady && (folders.length || permissions.organize) ? (
+    view === "all" && foldersReady && (rootFolders.length || permissions.organize) ? (
       <section aria-labelledby="folders-strip-heading" className="min-w-0 space-y-2.5">
         <div className="flex items-center gap-2">
           <h2 id="folders-strip-heading" className="text-lg font-semibold text-heading">
@@ -256,7 +306,7 @@ export function MediaLibraryWorkspace({
               </button>
             </div>
           ) : null}
-          {folders.length ? (
+          {rootFolders.length ? (
             <Link
               href="/admin/media/folders"
               className={cn("inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-accent hover:underline", scrollable ? "ml-auto lg:ml-3" : "ml-auto")}
@@ -280,13 +330,13 @@ export function MediaLibraryWorkspace({
                 />
               </li>
             ))}
-            {folders.length > STRIP_MAX ? (
+            {rootFolders.length > STRIP_MAX ? (
               <li className="min-w-0">
                 <Link
                   href="/admin/media/folders"
                   className="flex h-[5.25rem] items-center justify-center gap-1.5 rounded-2xl border border-border bg-card text-sm font-semibold text-accent shadow-sm hover:bg-accent-subtle/40"
                 >
-                  +{(folders.length - STRIP_MAX).toLocaleString()} more folders <ArrowRight className="h-4 w-4" aria-hidden />
+                  +{(rootFolders.length - STRIP_MAX).toLocaleString()} more folders <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
               </li>
             ) : null}
@@ -298,7 +348,7 @@ export function MediaLibraryWorkspace({
                   className="flex h-[5.25rem] w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-accent/30 bg-accent-subtle/20 text-sm font-semibold text-accent transition-colors hover:border-accent/60 hover:bg-accent-subtle/50"
                 >
                   <Plus className="h-5 w-5" aria-hidden />
-                  {folders.length ? "Create Folder" : "Create your first folder"}
+                  {rootFolders.length ? "Create Folder" : "Create your first folder"}
                 </button>
               </li>
             ) : null}
@@ -319,7 +369,7 @@ export function MediaLibraryWorkspace({
     ...(foldersReady && folders.length
       ? ([
           { type: "label", id: "folders-label", label: "Upload into a folder" },
-          ...sortLibraryFolders(folders, "updated")
+          ...sortLibraryFolders(pathFolders, "updated")
             .slice(0, 8)
             .map((f) => ({ id: `f-${f.id}`, label: f.name, icon: Folder, onSelect: () => openUpload(f.id) }) satisfies ActionMenuItem),
         ] satisfies ActionMenuItem[])
@@ -331,12 +381,17 @@ export function MediaLibraryWorkspace({
       <nav aria-label="Media Library" className="min-w-0 flex-1 sm:flex-none">
         <div className="flex rounded-xl border border-border bg-subtle p-1">
           <TabLink href="/admin/media" active={view === "all"} icon={ImageIcon} label="All Media" short="All" count={libraryTotal} />
-          <TabLink href="/admin/media/folders" active={view !== "all"} icon={Folder} label="Folders" short="Folders" count={foldersReady ? folders.length : null} />
+          <TabLink href="/admin/media/folders" active={view !== "all"} icon={Folder} label="Folders" short="Folders" count={foldersReady ? rootFolders.length : null} />
         </div>
       </nav>
       <div className="ml-auto flex shrink-0 gap-2">
         {permissions.organize && foldersReady ? (
-          <Button variant="outline" onClick={() => setNameDialog({ mode: "create" })} className="h-11 rounded-xl px-3 sm:px-4" aria-label="New folder">
+          <Button
+            variant="outline"
+            onClick={() => createFolderIn(view === "folder" ? currentFolder : null)}
+            className="h-11 rounded-xl px-3 sm:px-4"
+            aria-label={view === "folder" && currentFolder && subfoldersSupported ? `New folder in ${currentFolder.name}` : "New folder"}
+          >
             <FolderPlus className="h-4 w-4" />
             <span className="hidden sm:inline">New Folder</span>
           </Button>
@@ -473,6 +528,14 @@ export function MediaLibraryWorkspace({
               Folders
             </Link>
             <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {trail.slice(0, -1).map((f) => (
+              <span key={f.id} className="flex min-w-0 items-center gap-1">
+                <Link href={folderHref(f.id)} className="max-w-[10rem] truncate rounded hover:text-accent">
+                  {f.name}
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              </span>
+            ))}
             <span className="truncate text-heading" aria-current="page">
               {currentFolder.name}
             </span>
@@ -486,9 +549,11 @@ export function MediaLibraryWorkspace({
                 {currentFolder.name}
               </h2>
               <p className="text-sm text-muted">
-                {folderSummary ? folderItemCountLabel(folderSummary.itemCount) : " "}
+                {folderSummary ? folderContentsLabel(folderSummary) : " "}
                 {folderSummary && (folderSummary.share.link || folderSummary.share.people) ? (
                   <span className="text-accent"> · Shared{folderSummary.share.link ? " with a link" : ""}</span>
+                ) : sharedVia ? (
+                  <span className="text-accent"> · Shared through “{sharedVia.name}”</span>
                 ) : null}
               </p>
             </div>
@@ -522,6 +587,35 @@ export function MediaLibraryWorkspace({
         </section>
       ) : null}
 
+      {view === "folder" && currentFolder && foldersReady && (childFolders.length || (permissions.organize && subfoldersSupported)) ? (
+        <section aria-label="Folders in this folder" className="min-w-0">
+          <ul className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {childFolders.map((f) => (
+              <li key={f.id} className="min-w-0">
+                <FolderStripCard
+                  folder={f}
+                  coverUrl={coverUrlFor(f)}
+                  onMenu={(folder, el) => setMenu({ folder, anchor: { kind: "element", element: el } })}
+                  onDropItems={permissions.organize ? (t, keys) => void dropOnFolder(t, keys) : undefined}
+                />
+              </li>
+            ))}
+            {permissions.organize && subfoldersSupported ? (
+              <li className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => createFolderIn(currentFolder)}
+                  className="flex h-[5.25rem] w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-accent/30 bg-accent-subtle/20 text-sm font-semibold text-accent transition-colors hover:border-accent/60 hover:bg-accent-subtle/50"
+                >
+                  <FolderPlus className="h-5 w-5" aria-hidden />
+                  New folder
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
+
       {browser && (view === "all" || (view === "folder" && currentFolder)) ? (
         <AssetBrowser
           key={view === "folder" ? currentFolder?.id : "all"}
@@ -531,7 +625,7 @@ export function MediaLibraryWorkspace({
           initialKindCounts={browser.initialKindCounts}
           initialQuery={browser.initialQuery}
           filterOptions={filterOptions}
-          folders={folders}
+          folders={pathFolders}
           foldersReady={foldersReady}
           permissions={permissions}
           reloadSignal={reloadSignal}
@@ -549,6 +643,7 @@ export function MediaLibraryWorkspace({
         open={nameDialog !== null}
         mode={nameDialog?.mode ?? "create"}
         initialName={nameDialog?.mode === "rename" ? nameDialog.folder.name : ""}
+        parentName={nameDialog?.mode === "create" ? (nameDialog.parent?.name ?? null) : null}
         onClose={() => setNameDialog(null)}
         onSubmit={async (name) => {
           if (nameDialog?.mode === "rename") {
@@ -561,7 +656,8 @@ export function MediaLibraryWorkspace({
             router.refresh();
             return null;
           }
-          const created = await createLibraryFolderRequest(name);
+          const parent = nameDialog?.mode === "create" ? (nameDialog.parent ?? null) : null;
+          const created = await createLibraryFolderRequest(name, parent?.id ?? null);
           if (typeof created === "string") return created;
           setNameDialog(null);
           refreshFolders();
@@ -585,12 +681,37 @@ export function MediaLibraryWorkspace({
           Only the folder is deleted. The {deleting ? folderItemCountLabel(deleting.itemCount) : "items"} in it stay in their projects and
           in your library.
         </p>
+        {deletingSubfolders ? (
+          <p>
+            Its {deletingSubfolders.toLocaleString()} subfolder{deletingSubfolders === 1 ? " is" : "s are"} deleted too — their media is
+            kept as well.
+          </p>
+        ) : null}
         {deleting && (deleting.share.link || deleting.share.people) ? (
           <p className="rounded-md bg-amber-50 p-2 text-amber-900 surface-dark:bg-amber-500/10 surface-dark:text-amber-200">
             This folder is shared. Its share links stop working immediately.
           </p>
         ) : null}
       </ConfirmDialog>
+
+      <MoveFolderDialog
+        open={moving !== null}
+        folder={moving}
+        folders={folders}
+        onClose={() => setMoving(null)}
+        onMove={async (parentId) => {
+          if (!moving) return null;
+          const err = await updateLibraryFolderRequest(moving.id, { parentId });
+          if (err) return err;
+          const dest = parentId ? folders.find((f) => f.id === parentId)?.name : null;
+          setFolders((prev) => prev.map((f) => (f.id === moving.id ? { ...f, parentId } : f)));
+          toast.success(dest ? `Moved “${moving.name}” into “${dest}”` : `Moved “${moving.name}” to the top level`);
+          setMoving(null);
+          refreshFolders();
+          router.refresh();
+          return null;
+        }}
+      />
 
       <CoverPickerDialog
         open={coverFor !== null}
@@ -616,7 +737,7 @@ export function MediaLibraryWorkspace({
           if (openUploadOnMount) router.replace(view === "all" ? "/admin/media" : window.location.pathname);
         }}
         projects={filterOptions.projects}
-        libraryFolders={foldersReady ? folders.map((f) => ({ id: f.id, name: f.name })) : undefined}
+        libraryFolders={foldersReady ? pathFolders.map((f) => ({ id: f.id, name: f.name })) : undefined}
         defaultLibraryFolderId={uploadFolderId ?? currentFolder?.id ?? null}
         onAddedToFolder={() => refreshFolders()}
         onUploaded={() => {

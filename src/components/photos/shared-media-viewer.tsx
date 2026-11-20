@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Box,
   ChevronLeft,
@@ -8,6 +9,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Folder,
   Globe,
   ImageOff,
   Images,
@@ -21,6 +23,15 @@ import { Button } from "@/components/ui/button";
 import { ViewOnlyAccessChip } from "@/components/ui/view-only-access-chip";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import { PhotoShareHeader } from "@/components/photos/photo-share-viewer";
+import {
+  DropOverlay,
+  EmptyDropZone,
+  SharedNewFolderButton,
+  SharedUploadButton,
+  UploadTray,
+  useSharedFolderUploader,
+  useWindowFileDrop,
+} from "@/components/photos/shared-folder-uploader";
 import { DOWNLOAD_QUALITY_PARAM, type DownloadQuality } from "@/lib/download-quality";
 import { sharedItemUrl, type SharedMediaItem, type SharedMediaKind } from "@/lib/shared-media-types";
 import { formatFileSize } from "@/lib/brand";
@@ -449,20 +460,41 @@ const FILTERS: { value: "all" | SharedMediaKind; label: string }[] = [
   { value: "document", label: "Files" },
 ];
 
-/** Gallery for a shared Media Library folder. */
+function folderUrl(token: string, folderId: string | null): string {
+  const base = `/shared/${encodeURIComponent(token)}`;
+  return folderId ? `${base}?folder=${encodeURIComponent(folderId)}` : base;
+}
+
+/** Gallery for a shared Media Library folder (or a subfolder of it, v136). */
 export function LibraryFolderShareViewer({
   token,
   folderName,
+  folderId = null,
+  trail = [],
+  subfolders = [],
   items,
   allowDownload,
+  allowUpload = false,
+  allowCreateFolders = false,
   truncated,
 }: {
   token: string;
   folderName: string;
+  /** The subfolder being shown; null = the shared folder itself. */
+  folderId?: string | null;
+  /** From the shared folder down to this one. */
+  trail?: { id: string; name: string }[];
+  subfolders?: { id: string; name: string }[];
   items: SharedMediaItem[];
   allowDownload: boolean;
+  /** "Can upload" share (v135): drag-and-drop anywhere, plus an Upload button in the header. */
+  allowUpload?: boolean;
+  /** "Can upload" guests may also add folders here (v136). */
+  allowCreateFolders?: boolean;
   truncated: boolean;
 }) {
+  const uploader = useSharedFolderUploader(token, folderId);
+  const dragging = useWindowFileDrop(uploader.addFiles, allowUpload);
   const [filter, setFilter] = useState<"all" | SharedMediaKind>("all");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const kinds = useMemo(() => new Set(items.map((i) => i.kind)), [items]);
@@ -472,15 +504,53 @@ export function LibraryFolderShareViewer({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <PhotoShareHeader />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 sm:py-8">
+      <PhotoShareHeader>
+        {allowUpload ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {allowCreateFolders ? <SharedNewFolderButton token={token} folderId={folderId} folderName={folderName} /> : null}
+            <SharedUploadButton onFiles={uploader.addFiles} />
+          </div>
+        ) : null}
+      </PhotoShareHeader>
+      <main
+        className={cn(
+          "mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6 sm:py-8",
+          allowUpload && uploader.rows.length > 0 && "pb-40 sm:pb-8"
+        )}
+      >
+        {trail.length > 1 ? (
+          <nav aria-label="Folders" className="-mb-2 flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted">
+            {trail.slice(0, -1).map((f, i) => (
+              <span key={f.id} className="flex min-w-0 items-center gap-1">
+                <Link href={folderUrl(token, i === 0 ? null : f.id)} className="max-w-[12rem] truncate rounded hover:text-accent hover:underline">
+                  {f.name}
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              </span>
+            ))}
+            <span className="truncate text-heading" aria-current="page">
+              {folderName}
+            </span>
+          </nav>
+        ) : null}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="break-words text-2xl font-semibold tracking-tight text-heading">{folderName}</h1>
-            <p className="mt-0.5 text-sm text-muted">{countSummary(items)}</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {subfolders.length ? `${subfolders.length} ${subfolders.length === 1 ? "folder" : "folders"}${items.length ? " · " : ""}` : ""}
+              {items.length || !subfolders.length ? countSummary(items) : ""}
+            </p>
           </div>
-          <ViewOnlyAccessChip>{allowDownload ? "Shared folder" : "Shared folder · view only"}</ViewOnlyAccessChip>
+          <ViewOnlyAccessChip>
+            {allowUpload ? "Shared folder · you can upload" : allowDownload ? "Shared folder" : "Shared folder · view only"}
+          </ViewOnlyAccessChip>
         </div>
+
+        {allowUpload && items.length > 0 ? (
+          <p className="hidden text-sm text-muted sm:block">
+            Drag photos or videos anywhere on this page to add them to the folder.
+          </p>
+        ) : null}
 
         {kinds.size > 1 ? (
           <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
@@ -511,7 +581,30 @@ export function LibraryFolderShareViewer({
           </p>
         ) : null}
 
-        {items.length === 0 ? (
+        {subfolders.length ? (
+          <ul aria-label="Folders" className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+            {subfolders.map((f) => (
+              <li key={f.id} className="min-w-0">
+                <Link
+                  href={folderUrl(token, f.id)}
+                  className="flex min-h-14 items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-heading shadow-sm transition-colors hover:border-accent/40 hover:bg-accent-subtle/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-accent">
+                    <Folder className="h-5 w-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={f.name}>
+                    {f.name}
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {items.length === 0 && allowUpload ? (
+          <EmptyDropZone onFiles={uploader.addFiles} />
+        ) : items.length === 0 && subfolders.length ? null : items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border p-10 text-center">
             <Images className="h-8 w-8 text-muted" aria-hidden />
             <p className="font-medium text-heading">Nothing here yet</p>
@@ -539,6 +632,13 @@ export function LibraryFolderShareViewer({
           onIndexChange={(i) => setOpenKey(visible[i]?.key ?? null)}
           onClose={() => setOpenKey(null)}
         />
+      ) : null}
+
+      {allowUpload ? (
+        <>
+          <UploadTray rows={uploader.rows} onRetry={uploader.retry} onClear={uploader.clearFinished} />
+          {dragging ? <DropOverlay folderName={folderName} /> : null}
+        </>
       ) : null}
     </div>
   );

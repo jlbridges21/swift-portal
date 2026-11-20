@@ -23,7 +23,7 @@ import { getAppSettings } from "@/lib/app-settings";
 import { isClientVisibleMedia } from "@/lib/client-media";
 import { normalizeStatus } from "@/lib/constants";
 import { effectiveRequireDeliveredForDownloads, resolveProjectDownloadAllowed } from "@/lib/deliverables";
-import { loadLibraryFolderMembers } from "@/lib/library-folders";
+import { folderPath, folderSubtreeIds, loadFolderTree, loadLibraryFolderMembers } from "@/lib/library-folders";
 import type { ResolvedMediaShare } from "@/lib/media-shares";
 import { clientMayAccessMediaSection, isMediaSectionVisibleForClient, mediaSectionsFromProject } from "@/lib/project-media-sections";
 import type { SharedMediaItem, SharedMediaKind } from "@/lib/shared-media-types";
@@ -308,10 +308,55 @@ async function sourcesFor(
   return out;
 }
 
-/** The items a library-folder share shows right now, newest-added first. */
-export async function listSharedLibraryFolderItems(share: ResolvedMediaShare): Promise<SharedMediaItem[]> {
+/** A folder inside a shared folder's tree, as the anonymous viewer sees it. */
+export type SharedFolderRef = { id: string; name: string };
+
+export type SharedFolderView = {
+  /** The folder being shown: the shared folder itself or one beneath it. */
+  folder: SharedFolderRef;
+  /** From the shared folder down to `folder` (length 1 at the top). Never shows anything above the share. */
+  trail: SharedFolderRef[];
+  subfolders: SharedFolderRef[];
+  items: SharedMediaItem[];
+  /** Subfolders are supported (v136), so a "Can upload" guest may create folders. */
+  nested: boolean;
+};
+
+/**
+ * Folders this share opens: the shared folder and everything beneath it (v136), evaluated live
+ * so subfolders added later are included and deleted ones drop out.
+ */
+export async function sharedFolderTree(share: ResolvedMediaShare) {
+  if (share.subject.kind !== "library_folder") return null;
+  const rootId = share.subject.libraryFolder.id;
+  const { nodes, nested } = await loadFolderTree(share.businessId);
+  const ids = folderSubtreeIds(nodes, rootId);
+  return { rootId, nodes, nested, ids: ids.length ? ids : [rootId] };
+}
+
+/**
+ * What /shared/{token}?folder=… shows. `folderId` null = the shared folder. Returns null when
+ * `folderId` isn't inside the share (callers 404 without detail).
+ */
+export async function getSharedFolderView(share: ResolvedMediaShare, folderId: string | null): Promise<SharedFolderView | null> {
+  const tree = await sharedFolderTree(share);
+  if (!tree || share.subject.kind !== "library_folder") return null;
+  const targetId = folderId ?? tree.rootId;
+  if (!tree.ids.includes(targetId)) return null;
+  const trail = folderPath(tree.nodes, targetId, tree.rootId).map((n) => ({ id: n.id, name: n.name }));
+  if (!trail.length) trail.push({ id: tree.rootId, name: share.subject.libraryFolder.name });
+  const subfolders = tree.nodes
+    .filter((n) => n.parentId === targetId)
+    .map((n) => ({ id: n.id, name: n.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+  const items = await listSharedLibraryFolderItems(share, targetId);
+  return { folder: trail[trail.length - 1], trail, subfolders, items, nested: tree.nested };
+}
+
+/** The items one folder of a library-folder share shows right now, newest-added first. */
+export async function listSharedLibraryFolderItems(share: ResolvedMediaShare, folderId?: string): Promise<SharedMediaItem[]> {
   if (share.subject.kind !== "library_folder") return [];
-  const members = await loadLibraryFolderMembers(share.businessId, share.subject.libraryFolder.id);
+  const members = await loadLibraryFolderMembers(share.businessId, folderId ?? share.subject.libraryFolder.id);
   const order: { key: string; at: string }[] = [];
   const ids = { media: [] as string[], tour: [] as string[], model: [] as string[] };
   for (const [id, at] of members.media) {
@@ -374,14 +419,21 @@ export async function resolveSharedLibraryItem(share: ResolvedMediaShare, key: s
   if (subject.kind !== "library_folder") return null;
   const ref = parseKey(key);
   if (!ref) return null;
+  const tree = await sharedFolderTree(share);
+  if (!tree) return null;
   const db = await createTenantServiceClient(share.businessId);
   const column = ref.kind === "tour" ? "tour_id" : ref.kind === "model" ? "model_id" : "media_asset_id";
-  const { data: member } = await db
-    .from("library_folder_items")
-    .select("id")
-    .eq("folder_id", subject.libraryFolder.id)
-    .eq(column, ref.id)
-    .maybeSingle();
+  // A member of the shared folder or of any folder beneath it.
+  let member = false;
+  for (let i = 0; i < tree.ids.length && !member; i += IN_CHUNK) {
+    const { data } = await db
+      .from("library_folder_items")
+      .select("id")
+      .in("folder_id", tree.ids.slice(i, i + IN_CHUNK))
+      .eq(column, ref.id)
+      .limit(1);
+    member = Boolean(data?.length);
+  }
   if (!member) return null;
   const ids =
     ref.kind === "tour"

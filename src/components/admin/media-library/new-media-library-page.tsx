@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { ShellPageTitle } from "@/components/admin/app-shell/shell-page-title";
 import { MediaLibraryWorkspace, type MediaLibraryView } from "@/components/admin/media-library/media-library-workspace";
 import { getLibraryFolder } from "@/lib/library-folders";
-import { isUuid } from "@/lib/library-folder-types";
+import { isUuid, libraryFolderTrail } from "@/lib/library-folder-types";
 import { queryMediaLibrary } from "@/lib/media-library";
 import { loadMediaLibraryShell } from "@/lib/media-library-page";
 import type { Profile } from "@/lib/types";
@@ -71,13 +71,25 @@ export async function NewMediaLibraryPage({
       <ShellPageTitle
         title={folder ? folder.name : "Media Library"}
         description={folder ? "Media Library folder" : PAGE_DESCRIPTION}
-        crumbs={folder ? [{ label: "Media Library", href: "/admin/media" }, { label: "Folders", href: "/admin/media/folders" }] : undefined}
+        crumbs={
+          folder
+            ? [
+                { label: "Media Library", href: "/admin/media" },
+                { label: "Folders", href: "/admin/media/folders" },
+                // Parent folders (v136), top level first.
+                ...libraryFolderTrail(folderList.folders, folder.id)
+                  .slice(0, -1)
+                  .map((f) => ({ label: f.name, href: `/admin/media/folders/${f.id}` })),
+              ]
+            : undefined
+        }
       />
       <main className="app-page app-page-wide mx-auto max-w-[1600px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
         <MediaLibraryWorkspace
           view={view}
           initialFolders={folderList.folders}
           foldersSetupRequired={folderList.setupRequired}
+          subfoldersSupported={folderList.subfoldersSupported}
           libraryTotal={libraryTotal}
           folder={folder}
           browser={

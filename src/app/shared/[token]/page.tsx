@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getAppSettings } from "@/lib/app-settings";
 import { surfaceChrome } from "@/lib/brand-color";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
-import { getSharedItem, listSharedLibraryFolderItems, SHARED_FOLDER_MAX_ITEMS } from "@/lib/library-folder-shares";
+import { getSharedFolderView, getSharedItem, SHARED_FOLDER_MAX_ITEMS } from "@/lib/library-folder-shares";
 import { recordMediaShareView, resolveMediaShareToken } from "@/lib/media-shares";
 import {
   allowPhotoShareRequest,
@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ token: string }>;
+  /** folder: a subfolder of the shared folder (v136). */
+  searchParams: Promise<{ folder?: string }>;
 }
 
 export const metadata: Metadata = {
@@ -39,8 +41,8 @@ export async function generateViewport(): Promise<Viewport> {
  * 360° tour, 3D model). The token is the only credential; a signed-in session is ignored,
  * and nothing about projects or clients is shown. Folder contents are evaluated live.
  */
-export default async function SharedMediaPage({ params }: PageProps) {
-  const { token } = await params;
+export default async function SharedMediaPage({ params, searchParams }: PageProps) {
+  const [{ token }, sp] = await Promise.all([params, searchParams]);
   const host = await getPublicHostContext();
   if (!isActivePublicTenant(host)) notFound();
 
@@ -72,16 +74,26 @@ export default async function SharedMediaPage({ params }: PageProps) {
     );
   }
 
-  const items = await listSharedLibraryFolderItems(share);
-  await recordMediaShareView(share.businessId, share.shareId);
+  const requested = typeof sp.folder === "string" && sp.folder ? sp.folder : null;
+  const view = await getSharedFolderView(share, requested);
+  if (!view) notFound();
+  // Count one view per visit, not one per subfolder opened.
+  if (!requested) await recordMediaShareView(share.businessId, share.shareId);
+  const { items } = view;
 
   return (
     <PhotoShareBrand businessId={share.businessId}>
       <LibraryFolderShareViewer
+        key={view.folder.id}
         token={token}
-        folderName={share.subject.libraryFolder.name}
+        folderName={view.folder.name}
+        folderId={requested ? view.folder.id : null}
+        trail={view.trail}
+        subfolders={view.subfolders}
         items={items}
         allowDownload={share.allowDownload}
+        allowUpload={share.allowUpload}
+        allowCreateFolders={share.allowUpload && view.nested}
         truncated={items.length >= SHARED_FOLDER_MAX_ITEMS}
       />
     </PhotoShareBrand>

@@ -25,6 +25,8 @@ export function isMediaShareExpiryPreset(value: unknown): value is MediaShareExp
 type MediaShareViewBase = {
   id: string;
   allow_download: boolean;
+  /** v135: may add files to a shared Media Library folder. Always false for other subjects. */
+  allow_upload: boolean;
   expiry_preset: MediaShareExpiryPreset;
   access_expires_at: string | null;
   created_at: string;
@@ -45,7 +47,21 @@ export type MediaPersonShareView = MediaShareViewBase & {
 export type MediaShareState = {
   link: MediaLinkShareView | null;
   people: MediaPersonShareView[];
+  /** "Can upload" may be offered: a Media Library folder, with migration v135 applied. */
+  uploadAvailable: boolean;
 };
+
+/** What one share lets its recipient do. "upload" includes viewing and downloading. */
+export type MediaShareAccess = "view" | "download" | "upload";
+
+export function shareAccessOf(share: { allow_download: boolean; allow_upload?: boolean }): MediaShareAccess {
+  if (share.allow_upload) return "upload";
+  return share.allow_download ? "download" : "view";
+}
+
+export function isMediaShareAccess(value: unknown): value is MediaShareAccess {
+  return value === "view" || value === "download" || value === "upload";
+}
 
 /** Per-photo (or per-folder) counts for grid badges. */
 export type PhotoShareSummary = { link: boolean; people: number };

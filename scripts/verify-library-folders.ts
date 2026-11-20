@@ -5,7 +5,11 @@
 import assert from "node:assert/strict";
 import {
   LIBRARY_FOLDER_NAME_MAX,
+  folderContentsLabel,
   folderItemCountLabel,
+  libraryFolderDescendants,
+  libraryFolderPathName,
+  libraryFolderTrail,
   libraryItemColumn,
   libraryItemKey,
   normalizeLibraryFolderName,
@@ -62,6 +66,8 @@ check("each kind maps to the right membership column", () => {
 const f = (name: string, itemCount: number, updatedAt: string): LibraryFolderSummary => ({
   id: name,
   name,
+  parentId: null,
+  subfolderCount: 0,
   itemCount,
   coverAssetId: null,
   autoCoverAssetId: null,
@@ -92,6 +98,42 @@ check("public item URLs encode the token and key", () => {
     sharedItemUrl("a/b", `photo:${UUID}`, "thumb"),
     `/api/public/shared/a%2Fb?item=photo%3A${UUID}&variant=thumb`
   );
+});
+
+// v136 subfolders
+const tree = [
+  { id: "clients", name: "Clients", parentId: null },
+  { id: "smith", name: "Smith", parentId: "clients" },
+  { id: "raw", name: "Raw", parentId: "smith" },
+  { id: "edits", name: "Edits", parentId: "smith" },
+  { id: "other", name: "Other", parentId: null },
+];
+
+check("folder trail runs from the top level down", () => {
+  assert.deepEqual(libraryFolderTrail(tree, "raw").map((x) => x.id), ["clients", "smith", "raw"]);
+  assert.deepEqual(libraryFolderTrail(tree, "other").map((x) => x.id), ["other"]);
+  assert.deepEqual(libraryFolderTrail(tree, "missing"), []);
+  assert.equal(libraryFolderPathName(tree, "raw"), "Clients / Smith / Raw");
+});
+
+check("descendants include every level and never the folder itself", () => {
+  assert.deepEqual(libraryFolderDescendants(tree, "clients").map((x) => x.id).sort(), ["edits", "raw", "smith"]);
+  assert.deepEqual(libraryFolderDescendants(tree, "raw"), []);
+});
+
+check("a parent cycle in bad data can't loop forever", () => {
+  const loop = [
+    { id: "a", name: "A", parentId: "b" },
+    { id: "b", name: "B", parentId: "a" },
+  ];
+  assert.equal(libraryFolderTrail(loop, "a").length, 2);
+  assert.deepEqual(libraryFolderDescendants(loop, "a").map((x) => x.id), ["b"]);
+});
+
+check("contents label lists subfolders first, only when there are any", () => {
+  assert.equal(folderContentsLabel({ itemCount: 64, subfolderCount: 0 }), "64 items");
+  assert.equal(folderContentsLabel({ itemCount: 1, subfolderCount: 3 }), "3 folders · 1 item");
+  assert.equal(folderContentsLabel({ itemCount: 0, subfolderCount: 1 }), "1 folder · 0 items");
 });
 
 console.log(`\n${passed} checks passed`);

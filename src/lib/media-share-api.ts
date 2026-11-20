@@ -22,7 +22,12 @@ import {
   updateShare,
   type ShareSubject,
 } from "@/lib/media-shares";
-import { isMediaShareExpiryPreset, type MediaInviteResult, type MediaShareState } from "@/lib/media-share-types";
+import {
+  isMediaShareAccess,
+  isMediaShareExpiryPreset,
+  type MediaInviteResult,
+  type MediaShareState,
+} from "@/lib/media-share-types";
 import { parseShareEmailInput } from "@/lib/share-email-parse";
 import type { Profile } from "@/lib/types";
 
@@ -133,8 +138,19 @@ type ActionBody = {
   emails?: string[] | string;
   shareId?: string;
   allowDownload?: boolean;
+  /** "view" | "download" | "upload" — preferred over allowDownload when present. */
+  access?: string;
   expiryPreset?: string;
 };
+
+/** The access the request asks for, or undefined when it doesn't change access. */
+function requestedAccess(body: ActionBody): { allowDownload: boolean; allowUpload: boolean } | undefined {
+  if (isMediaShareAccess(body.access)) {
+    return { allowDownload: body.access !== "view", allowUpload: body.access === "upload" };
+  }
+  if (typeof body.allowDownload === "boolean") return { allowDownload: body.allowDownload, allowUpload: false };
+  return undefined;
+}
 
 /**
  * Actions: invite, resend, enable_link, rotate_link, update, revoke.
@@ -173,10 +189,12 @@ export async function handleShareAction(gate: Exclude<Gate, { error: NextRespons
         const emails = Array.isArray(body.emails)
           ? body.emails
           : parseShareEmailInput(typeof body.emails === "string" ? body.emails : "");
+        const access = requestedAccess(body);
         results = await invitePeople({
           subject,
           emails,
-          allowDownload: body.allowDownload === true,
+          allowDownload: access?.allowDownload ?? false,
+          allowUpload: access?.allowUpload ?? false,
           expiryPreset: parseMediaShareExpiry(body.expiryPreset),
           actorId,
         });
@@ -192,10 +210,11 @@ export async function handleShareAction(gate: Exclude<Gate, { error: NextRespons
       case "rotate_link": {
         if (!perms.link) return forbidden();
         const current = state.link;
+        const access = requestedAccess(body);
         await enableShareLink({
           subject,
-          allowDownload:
-            typeof body.allowDownload === "boolean" ? body.allowDownload : (current?.allow_download ?? false),
+          allowDownload: access ? access.allowDownload : (current?.allow_download ?? false),
+          allowUpload: access ? access.allowUpload : (current?.allow_upload ?? false),
           expiryPreset: isMediaShareExpiryPreset(body.expiryPreset)
             ? body.expiryPreset
             : (current?.expiry_preset ?? "indefinite"),
@@ -207,10 +226,12 @@ export async function handleShareAction(gate: Exclude<Gate, { error: NextRespons
       case "update": {
         if (!body.shareId || !target) throw new MediaShareError("Share not found.", 404);
         if (!canManage(target)) return forbidden();
+        const access = requestedAccess(body);
         await updateShare({
           subject,
           shareId: body.shareId,
-          allowDownload: typeof body.allowDownload === "boolean" ? body.allowDownload : undefined,
+          allowDownload: access?.allowDownload,
+          allowUpload: access?.allowUpload,
           expiryPreset: isMediaShareExpiryPreset(body.expiryPreset) ? body.expiryPreset : undefined,
           actorId,
         });

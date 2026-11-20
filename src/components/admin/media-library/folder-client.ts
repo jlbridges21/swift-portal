@@ -21,26 +21,29 @@ async function errorMessage(res: Response, fallback: string): Promise<string> {
   return json.error || fallback;
 }
 
-export async function fetchLibraryFolders(): Promise<{ setupRequired: boolean; folders: LibraryFolderSummary[] }> {
+export async function fetchLibraryFolders(): Promise<{ setupRequired: boolean; folders: LibraryFolderSummary[]; subfoldersSupported?: boolean }> {
   const res = await fetch("/api/library-folders", { credentials: "include", cache: "no-store" });
   if (!res.ok) throw new Error(await errorMessage(res, "Couldn't load folders."));
   return res.json();
 }
 
-/** Returns the new folder, or an error message (duplicate names, setup required, …). */
-export async function createLibraryFolderRequest(name: string): Promise<{ id: string; name: string } | string> {
+/** Returns the new folder, or an error message (duplicate names, setup required, …). `parentId` makes a subfolder. */
+export async function createLibraryFolderRequest(name: string, parentId: string | null = null): Promise<{ id: string; name: string } | string> {
   const res = await fetch("/api/library-folders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(parentId ? { name, parentId } : { name }),
   });
   if (!res.ok) return errorMessage(res, "Couldn't create the folder.");
   const json = (await res.json()) as { folder: { id: string; name: string } };
   return json.folder;
 }
 
-export async function updateLibraryFolderRequest(id: string, patch: { name?: string; coverAssetId?: string | null }): Promise<string | null> {
+export async function updateLibraryFolderRequest(
+  id: string,
+  patch: { name?: string; coverAssetId?: string | null; parentId?: string | null }
+): Promise<string | null> {
   const res = await fetch(`/api/library-folders/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

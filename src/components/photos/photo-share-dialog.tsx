@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Copy, Folder, Link2, Loader2, Mail, RotateCw, UserMinus, Users } from "lucide-react";
+import { AlertTriangle, Check, Copy, Folder, Link2, Loader2, Mail, RotateCw, Upload, UserMinus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   MEDIA_SHARE_EXPIRY_OPTIONS,
+  shareAccessOf,
   type MediaInviteResult,
   type MediaShareExpiryPreset,
   type MediaShareState,
@@ -24,7 +25,7 @@ export const FOLDER_SHARE_WARNING =
 
 /** Media Library folder share dialog (v126): live membership across projects. */
 export const LIBRARY_FOLDER_SHARE_WARNING =
-  "Everyone you share this folder with can see everything in it — including media you add later. Removing an item from the folder removes it from the shared view. Items marked internal-only are never shown, downloads still follow each project's download rules, and the projects themselves are never shared.";
+  "Everyone you share this folder with can see everything in it — including its subfolders and anything you add later. Removing an item from the folder removes it from the shared view. Items marked internal-only are never shown, downloads still follow each project's download rules, and the projects themselves are never shared.";
 
 type Permissions = { email: boolean; link: boolean };
 
@@ -47,6 +48,12 @@ const ACCESS_OPTIONS = [
   { value: "view", label: "View only" },
   { value: "download", label: "Can download original" },
 ];
+
+/** Media Library folders (v135) can also take uploads from the people they're shared with. */
+const FOLDER_ACCESS_OPTIONS = [...ACCESS_OPTIONS, { value: "upload", label: "Can upload" }];
+
+const UPLOAD_ACCESS_NOTE =
+  "Can upload: they can also add photos, videos and new folders to this folder — no account needed. Uploads land in your Media Library, and you keep them even if you stop sharing.";
 
 function expiryText(expiresAt: string | null): string {
   if (!expiresAt) return "No expiry";
@@ -226,7 +233,7 @@ export function PhotoShareDialog({
     const results = await act("invite", {
       action: "invite",
       emails,
-      allowDownload: inviteAccess === "download",
+      access: inviteAccess,
       expiryPreset: inviteExpiry,
     });
     if (!results) return;
@@ -253,6 +260,8 @@ export function PhotoShareDialog({
 
   const link = state?.link ?? null;
   const people = state?.people ?? [];
+  const accessOptions = state?.uploadAvailable ? FOLDER_ACCESS_OPTIONS : ACCESS_OPTIONS;
+  const anyUpload = inviteAccess === "upload" || Boolean(link?.allow_upload) || people.some((p) => p.allow_upload);
   const statusLine = state
     ? [
         people.length ? `${people.length} ${people.length === 1 ? "person" : "people"}` : null,
@@ -335,7 +344,7 @@ export function PhotoShareDialog({
                     <div className="sm:w-48">
                       <Select
                         aria-label="Access for new invites"
-                        options={ACCESS_OPTIONS}
+                        options={accessOptions}
                         value={inviteAccess}
                         onChange={(e) => setInviteAccess(e.target.value)}
                       />
@@ -361,6 +370,12 @@ export function PhotoShareDialog({
                   <p className="text-xs text-muted">
                     Each person gets their own private link by email. No account needed.
                   </p>
+                  {state.uploadAvailable && anyUpload ? (
+                    <p className="flex gap-2 text-xs text-muted">
+                      <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>{UPLOAD_ACCESS_NOTE}</span>
+                    </p>
+                  ) : null}
                 </form>
 
                 {people.length ? (
@@ -377,13 +392,13 @@ export function PhotoShareDialog({
                           <div className="w-44">
                             <Select
                               aria-label={`Access for ${p.email}`}
-                              options={ACCESS_OPTIONS}
-                              value={p.allow_download ? "download" : "view"}
+                              options={accessOptions}
+                              value={shareAccessOf(p)}
                               disabled={busy !== null}
                               onChange={(e) =>
                                 void act(
                                   `update-${p.id}`,
-                                  { action: "update", shareId: p.id, allowDownload: e.target.value === "download" },
+                                  { action: "update", shareId: p.id, access: e.target.value },
                                   "Access updated"
                                 )
                               }
@@ -463,13 +478,13 @@ export function PhotoShareDialog({
                       <div className="sm:w-48">
                         <Select
                           aria-label="Link access"
-                          options={ACCESS_OPTIONS}
-                          value={link.allow_download ? "download" : "view"}
+                          options={accessOptions}
+                          value={shareAccessOf(link)}
                           disabled={busy !== null}
                           onChange={(e) =>
                             void act(
                               "link-access",
-                              { action: "update", shareId: link.id, allowDownload: e.target.value === "download" },
+                              { action: "update", shareId: link.id, access: e.target.value },
                               "Link access updated"
                             )
                           }
@@ -494,6 +509,12 @@ export function PhotoShareDialog({
                         {viewsText(link.view_count)} · {expiryText(link.access_expires_at)}
                       </p>
                     </div>
+                    {link.allow_upload ? (
+                      <p className="flex gap-2 rounded-md bg-accent-subtle px-2.5 py-2 text-xs text-heading">
+                        <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+                        <span>Anyone with this link can add photos, videos and folders to this folder.</span>
+                      </p>
+                    ) : null}
                     <div className="flex flex-wrap gap-2 border-t border-border pt-3">
                       <Button
                         variant="outline"
