@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Folder, Link2, MoreHorizontal, Users } from "lucide-react";
 import { RemoteImage } from "@/components/ui/remote-image";
 import { folderContentsLabel, type LibraryFolderSummary } from "@/lib/library-folder-types";
-import { LIBRARY_DRAG_MIME } from "@/components/admin/media-library/library-ui";
+import { LIBRARY_DRAG_MIME, LIBRARY_FOLDER_DRAG_MIME } from "@/components/admin/media-library/library-ui";
 import { cn } from "@/lib/utils";
 
 export function folderHref(id: string) {
@@ -39,34 +39,83 @@ function ShareIndicator({ folder }: { folder: LibraryFolderSummary }) {
   );
 }
 
-/** Drop target behavior shared by every folder card (desktop drag from the media grid). */
-function useDropTarget(folder: LibraryFolderSummary, onDropItems?: (folder: LibraryFolderSummary, keys: string[]) => void) {
+/** Folder being dragged, if any (dataTransfer can't be read during dragover). */
+let draggingFolderId: string | null = null;
+
+/** Drag a folder card (desktop) to move it onto another folder or a breadcrumb. */
+export function folderDragProps(folder: { id: string; name: string }, enabled: boolean) {
+  if (!enabled) return {};
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      draggingFolderId = folder.id;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData(LIBRARY_FOLDER_DRAG_MIME, folder.id);
+      e.dataTransfer.setData("text/plain", folder.name);
+    },
+    onDragEnd: () => {
+      draggingFolderId = null;
+    },
+  };
+}
+
+/**
+ * Drop target for media (moved into the folder) and, when `onDropFolder` is given, for other
+ * folders (moved inside it). Exported for breadcrumbs.
+ */
+export function useFolderDropTarget(
+  targetId: string | null,
+  onDropItems?: (keys: string[]) => void,
+  onDropFolder?: (folderId: string) => void
+) {
   const [over, setOver] = useState(false);
-  if (!onDropItems) return { over: false, props: {} };
+  if (!onDropItems && !onDropFolder) return { over: false, props: {} };
+  const accepts = (e: React.DragEvent) =>
+    (onDropItems && e.dataTransfer.types.includes(LIBRARY_DRAG_MIME)) ||
+    (onDropFolder && e.dataTransfer.types.includes(LIBRARY_FOLDER_DRAG_MIME) && draggingFolderId !== targetId);
   return {
     over,
     props: {
       onDragOver: (e: React.DragEvent) => {
-        if (!e.dataTransfer.types.includes(LIBRARY_DRAG_MIME)) return;
+        if (!accepts(e)) return;
         e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
+        e.dataTransfer.dropEffect = "move";
         if (!over) setOver(true);
       },
       onDragLeave: () => setOver(false),
       onDrop: (e: React.DragEvent) => {
         setOver(false);
-        const raw = e.dataTransfer.getData(LIBRARY_DRAG_MIME);
+        const folderId = onDropFolder ? e.dataTransfer.getData(LIBRARY_FOLDER_DRAG_MIME) : "";
+        if (folderId) {
+          e.preventDefault();
+          draggingFolderId = null;
+          if (folderId !== targetId) onDropFolder?.(folderId);
+          return;
+        }
+        const raw = onDropItems ? e.dataTransfer.getData(LIBRARY_DRAG_MIME) : "";
         if (!raw) return;
         e.preventDefault();
         try {
           const keys = JSON.parse(raw) as unknown;
-          if (Array.isArray(keys)) onDropItems(folder, keys.filter((k): k is string => typeof k === "string"));
+          if (Array.isArray(keys)) onDropItems?.(keys.filter((k): k is string => typeof k === "string"));
         } catch {
           /* ignore malformed drag data */
         }
       },
     },
   };
+}
+
+function useDropTarget(
+  folder: LibraryFolderSummary,
+  onDropItems?: (folder: LibraryFolderSummary, keys: string[]) => void,
+  onDropFolder?: (target: LibraryFolderSummary, folderId: string) => void
+) {
+  return useFolderDropTarget(
+    folder.id,
+    onDropItems ? (keys) => onDropItems(folder, keys) : undefined,
+    onDropFolder ? (id) => onDropFolder(folder, id) : undefined
+  );
 }
 
 function MenuButton({ folder, onMenu, className }: { folder: LibraryFolderSummary; onMenu: (f: LibraryFolderSummary, el: HTMLElement) => void; className?: string }) {
@@ -94,18 +143,21 @@ type CardProps = {
   folder: LibraryFolderSummary;
   onMenu: (f: LibraryFolderSummary, el: HTMLElement) => void;
   onDropItems?: (folder: LibraryFolderSummary, keys: string[]) => void;
+  /** Another folder card was dropped here: move that folder inside this one. Also makes this card draggable. */
+  onDropFolder?: (target: LibraryFolderSummary, folderId: string) => void;
 };
 
 /**
  * Compact card for the All Media folder row: cover preview (photo or video poster; gradient +
  * folder icon when there's none), blue folder icon, name, item count, and the options menu.
  */
-export function FolderStripCard({ folder, onMenu, onDropItems, coverUrl = null }: CardProps & { coverUrl?: string | null }) {
-  const drop = useDropTarget(folder, onDropItems);
+export function FolderStripCard({ folder, onMenu, onDropItems, onDropFolder, coverUrl = null }: CardProps & { coverUrl?: string | null }) {
+  const drop = useDropTarget(folder, onDropItems, onDropFolder);
   const shared = folder.share.link || folder.share.people > 0;
   return (
     <div
       {...drop.props}
+      {...folderDragProps(folder, Boolean(onDropFolder))}
       className={cn(
         "group relative flex h-[5.25rem] min-w-0 items-center gap-3 rounded-2xl border bg-card p-2 pr-1.5 shadow-sm transition-all hover:-translate-y-px hover:shadow-md",
         drop.over ? "border-accent ring-2 ring-accent/30" : "border-border"
@@ -142,11 +194,12 @@ export function FolderStripCard({ folder, onMenu, onDropItems, coverUrl = null }
 }
 
 /** Large cover card for the Folders tab (mockup 2). */
-export function FolderGalleryCard({ folder, coverUrl, onMenu, onDropItems }: CardProps & { coverUrl: string | null }) {
-  const drop = useDropTarget(folder, onDropItems);
+export function FolderGalleryCard({ folder, coverUrl, onMenu, onDropItems, onDropFolder }: CardProps & { coverUrl: string | null }) {
+  const drop = useDropTarget(folder, onDropItems, onDropFolder);
   return (
     <article
       {...drop.props}
+      {...folderDragProps(folder, Boolean(onDropFolder))}
       className={cn(
         "group relative flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
         drop.over ? "border-accent ring-2 ring-accent/30" : "border-border"
@@ -186,10 +239,10 @@ export function FolderGalleryCard({ folder, coverUrl, onMenu, onDropItems }: Car
 }
 
 /** Row for the Folders tab list view. */
-export function FolderListRow({ folder, coverUrl, onMenu, onDropItems, updatedLabel }: CardProps & { coverUrl: string | null; updatedLabel: string }) {
-  const drop = useDropTarget(folder, onDropItems);
+export function FolderListRow({ folder, coverUrl, onMenu, onDropItems, onDropFolder, updatedLabel }: CardProps & { coverUrl: string | null; updatedLabel: string }) {
+  const drop = useDropTarget(folder, onDropItems, onDropFolder);
   return (
-    <li {...drop.props} className={cn("relative flex min-w-0 items-center gap-3 px-3 py-2.5 transition-colors hover:bg-subtle/60 sm:px-4", drop.over && "bg-accent-subtle")}>
+    <li {...drop.props} {...folderDragProps(folder, Boolean(onDropFolder))} className={cn("relative flex min-w-0 items-center gap-3 px-3 py-2.5 transition-colors hover:bg-subtle/60 sm:px-4", drop.over && "bg-accent-subtle")}>
       <Link href={folderHref(folder.id)} className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" aria-label={`Open folder ${folder.name}`} />
       <div className="relative h-12 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-subtle">
         {coverUrl ? (

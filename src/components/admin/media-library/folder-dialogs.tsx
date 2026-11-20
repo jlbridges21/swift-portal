@@ -187,9 +187,9 @@ export function AddToFolderDialog({
   const label = count === 1 ? "1 item" : `${count.toLocaleString()} items`;
 
   return (
-    <Modal open={open} onClose={busy ? () => {} : onClose} title={`Add ${label} to a folder`} className="sm:max-w-md">
+    <Modal open={open} onClose={busy ? () => {} : onClose} title={`Move ${label} to a folder`} className="sm:max-w-md">
       <div className="space-y-3">
-        <p className="text-sm text-muted">The originals stay where they are — folders just organize them.</p>
+        <p className="text-sm text-muted">Each item lives in one folder, so it leaves any folder it&apos;s in now. The originals stay in their projects.</p>
         {folders.length > 6 ? (
           <label className="relative block">
             <span className="sr-only">Search folders</span>

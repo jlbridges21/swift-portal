@@ -60,20 +60,27 @@ export async function deleteLibraryFolderRequest(id: string): Promise<string | n
 
 export type FolderItemsResult = { changed: number; unchanged: number; skipped: number };
 
-/** Add or remove "kind:id" keys in chunks. Throws with a readable message on failure. */
-export async function changeFolderItems(folderId: string, keys: string[], mode: "add" | "remove"): Promise<FolderItemsResult> {
+/**
+ * Add, move or remove "kind:id" keys in chunks. Throws with a readable message on failure.
+ * "move" puts each item in this folder and takes it out of every other folder.
+ */
+export async function changeFolderItems(folderId: string, keys: string[], mode: "add" | "move" | "remove"): Promise<FolderItemsResult> {
   const out: FolderItemsResult = { changed: 0, unchanged: 0, skipped: 0 };
   for (let i = 0; i < keys.length; i += CHUNK) {
     const part = keys.slice(i, i + CHUNK);
     const res = await fetch(`/api/library-folders/${folderId}/items`, {
-      method: mode === "add" ? "POST" : "DELETE",
+      method: mode === "remove" ? "DELETE" : "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ items: part }),
+      body: JSON.stringify(mode === "move" ? { items: part, move: true } : { items: part }),
     });
-    if (!res.ok) throw new Error(await errorMessage(res, mode === "add" ? "Couldn't add to the folder." : "Couldn't remove from the folder."));
+    if (!res.ok) {
+      throw new Error(
+        await errorMessage(res, mode === "remove" ? "Couldn't remove from the folder." : mode === "move" ? "Couldn't move to the folder." : "Couldn't add to the folder.")
+      );
+    }
     const json = (await res.json()) as { added?: number; alreadyInFolder?: number; removed?: number; skipped?: number };
-    if (mode === "add") {
+    if (mode !== "remove") {
       out.changed += json.added ?? 0;
       out.unchanged += json.alreadyInFolder ?? 0;
     } else {
@@ -82,6 +89,14 @@ export async function changeFolderItems(folderId: string, keys: string[], mode: 
     out.skipped += json.skipped ?? 0;
   }
   return out;
+}
+
+/** "Moved 12 to “Raw”" (items already there count as moved too — they now live only there). */
+export function movedToFolderMessage(folderName: string, r: FolderItemsResult): string {
+  const moved = r.changed + r.unchanged;
+  const parts = [moved ? `Moved ${moved.toLocaleString()} to “${folderName}”` : `Nothing moved to “${folderName}”`];
+  if (r.skipped) parts.push(`${r.skipped.toLocaleString()} skipped`);
+  return parts.join(" · ");
 }
 
 export function addedToFolderMessage(folderName: string, r: FolderItemsResult): string {

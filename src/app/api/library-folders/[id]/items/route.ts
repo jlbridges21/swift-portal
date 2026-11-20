@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addLibraryFolderItems, libraryFolderIsShared, removeLibraryFolderItems } from "@/lib/library-folders";
+import { addLibraryFolderItems, libraryFolderIsShared, moveIntoLibraryFolder, removeLibraryFolderItems } from "@/lib/library-folders";
 import {
   NO_STORE,
   authorizedItemRefs,
@@ -14,20 +14,22 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function readItems(request: Request): Promise<unknown[] | NextResponse> {
-  const body = (await request.json().catch(() => ({}))) as { items?: unknown };
+async function readItems(request: Request): Promise<{ items: unknown[]; move: boolean } | NextResponse> {
+  const body = (await request.json().catch(() => ({}))) as { items?: unknown; move?: unknown };
   if (!Array.isArray(body.items) || body.items.length === 0) {
     return NextResponse.json({ error: "Choose at least one item." }, { status: 400 });
   }
   if (body.items.length > LIBRARY_FOLDER_ITEMS_PER_REQUEST) {
     return NextResponse.json({ error: `Send up to ${LIBRARY_FOLDER_ITEMS_PER_REQUEST} items at a time.` }, { status: 400 });
   }
-  return body.items;
+  return { items: body.items, move: body.move === true };
 }
 
 /**
- * Add assets to the folder by reference (no copy). Body: { items: ["photo:<uuid>", …] }.
+ * Add assets to the folder by reference (no copy). Body: { items: ["photo:<uuid>", …], move? }.
  * Idempotent: items already in the folder are counted, not duplicated.
+ * move: true also takes them out of every other folder (one folder per item) — the portal's
+ * "Move" action. Without it the items are only added (used by "Share" → new folder).
  */
 export async function POST(request: Request, { params }: Ctx) {
   const { id } = await params;
@@ -35,8 +37,9 @@ export async function POST(request: Request, { params }: Ctx) {
   if (!auth.ok) return auth.response;
   const bad = badFolderId(id);
   if (bad) return bad;
-  const items = await readItems(request);
-  if (items instanceof NextResponse) return items;
+  const body = await readItems(request);
+  if (body instanceof NextResponse) return body;
+  const { items, move } = body;
   try {
     // Adding to a shared folder publishes the additions immediately.
     if (
@@ -49,7 +52,9 @@ export async function POST(request: Request, { params }: Ctx) {
       );
     }
     const { refs, denied, invalid } = await authorizedItemRefs(auth.businessId, auth.profile, items);
-    const result = await addLibraryFolderItems(auth.businessId, id, refs, auth.profile.id);
+    const result = move
+      ? await moveIntoLibraryFolder(auth.businessId, id, refs, auth.profile.id)
+      : await addLibraryFolderItems(auth.businessId, id, refs, auth.profile.id);
     return NextResponse.json({ ...result, skipped: denied + invalid }, { headers: NO_STORE });
   } catch (err) {
     return folderErrorResponse(err, "add items");
@@ -63,8 +68,9 @@ export async function DELETE(request: Request, { params }: Ctx) {
   if (!auth.ok) return auth.response;
   const bad = badFolderId(id);
   if (bad) return bad;
-  const items = await readItems(request);
-  if (items instanceof NextResponse) return items;
+  const body = await readItems(request);
+  if (body instanceof NextResponse) return body;
+  const { items } = body;
   try {
     const { refs, denied, invalid } = await authorizedItemRefs(auth.businessId, auth.profile, items);
     const result = await removeLibraryFolderItems(auth.businessId, id, refs);

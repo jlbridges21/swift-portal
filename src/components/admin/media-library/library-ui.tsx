@@ -145,3 +145,6 @@ export function useThumbUrls(ids: (string | null | undefined)[]) {
 
 /** Drag payload for media cards dropped on folder cards (desktop). */
 export const LIBRARY_DRAG_MIME = "application/x-shootportal-library-items";
+
+/** Drag payload for a folder card dropped on another folder (or a breadcrumb) to move it (v136). */
+export const LIBRARY_FOLDER_DRAG_MIME = "application/x-shootportal-library-folder";
