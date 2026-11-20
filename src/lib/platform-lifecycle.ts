@@ -220,14 +220,16 @@ export async function buildLifecycleVariables(
   const supabase = await createServiceClient();
   let planName = business.plan || "Studio";
   let planPrice = "";
+  let planPricing: { monthlyCents: number | null; annualPerMonthCents: number | null } | null = null;
   if (business.plan) {
     const { data: plan } = await supabase
       .from("plans")
-      .select("name, price_monthly_cents")
+      .select("name, price_monthly_cents, price_annual_cents")
       .eq("key", business.plan)
       .maybeSingle();
     if (plan) {
       planName = plan.name || planName;
+      planPricing = { monthlyCents: plan.price_monthly_cents, annualPerMonthCents: plan.price_annual_cents };
       planPrice = formatPlanPrice(plan.price_monthly_cents);
       if (planPrice !== "—") planPrice = `${planPrice}/mo`;
       else planPrice = "";
@@ -250,14 +252,14 @@ export async function buildLifecycleVariables(
   let subscribeSaveOffer = "";
   try {
     const { loadIntroOfferContext } = await import("@/lib/intro-offer-server");
-    const { introOfferSavingsLabel } = await import("@/lib/intro-offer");
+    const { quotePlan, subscribeSaveLabel } = await import("@/lib/intro-offer");
     const { decision } = await loadIntroOfferContext(
       { id: business.id, subscription_status: business.subscription_status ?? "", trial_ends_at: business.trial_ends_at ?? null },
       {}
     );
     if (decision.eligible && decision.kind === "checkout") {
       const ends = new Date(decision.endsAt).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-      subscribeSaveOffer = `Subscribe before ${ends} and save ${introOfferSavingsLabel()} on your first subscription.`;
+      subscribeSaveOffer = `Subscribe before ${ends} and save ${subscribeSaveLabel(planPricing ? quotePlan(planPricing, true) : null)} on your first subscription.`;
     }
   } catch {
     subscribeSaveOffer = "";
