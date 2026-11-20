@@ -82,23 +82,30 @@ export default async function SharedMediaPage({ params, searchParams }: PageProp
   if (!requested) await recordMediaShareView(share.businessId, share.shareId);
   const { items } = view;
 
+  // Next.js scrolls a new page into view starting from its first DOM element, skipping
+  // elements without a box. BrandProvider renders a <style> and a `display: contents` wrapper,
+  // so without this real element Next walked past the page to the toast region at the end of
+  // <body> and every folder opened scrolled to the bottom. This div is what it scrolls to now.
   return (
-    <PhotoShareBrand businessId={share.businessId}>
-      <LibraryFolderShareViewer
-        key={view.folder.id}
-        token={token}
-        folderName={view.folder.name}
-        folderId={requested ? view.folder.id : null}
-        trail={view.trail}
-        subfolders={view.subfolders}
-        items={items}
-        cover={view.cover}
-        totalItems={view.totalItems}
-        allowDownload={share.allowDownload}
-        allowUpload={share.allowUpload}
-        allowCreateFolders={share.allowUpload && view.nested}
-        truncated={items.length >= SHARED_FOLDER_MAX_ITEMS}
-      />
-    </PhotoShareBrand>
+    <div data-shared-folder-page>
+      <PhotoShareBrand businessId={share.businessId}>
+        <LibraryFolderShareViewer
+          key={view.folder.id}
+          token={token}
+          folderName={view.folder.name}
+          folderId={requested ? view.folder.id : null}
+          trail={view.trail}
+          subfolders={view.subfolders}
+          items={items}
+          cover={view.cover}
+          totalItems={view.totalItems}
+          downloadableCount={view.downloadableCount}
+          allowDownload={share.allowDownload}
+          allowUpload={share.allowUpload}
+          allowCreateFolders={share.allowUpload && view.nested}
+          truncated={items.length >= SHARED_FOLDER_MAX_ITEMS}
+        />
+      </PhotoShareBrand>
+    </div>
   );
 }

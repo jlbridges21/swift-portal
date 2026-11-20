@@ -89,6 +89,20 @@ export interface DownloadableAsset {
   title?: string | null;
   /** Storage bucket override (e.g. "project-documents"); defaults to project-media. */
   bucket?: string;
+  /**
+   * Sub-directory inside the ZIP, e.g. ["Commercial", "Raw"] — shared-folder downloads keep the
+   * folder structure. Each segment is sanitized; omitted = top level.
+   */
+  zip_dir?: string[];
+}
+
+/** "Commercial/Raw/" for a ZIP sub-directory (no slashes, dots or empty names survive). */
+function zipDirPrefix(segments: string[] | undefined): string {
+  if (!segments?.length) return "";
+  const clean = segments
+    .map((seg) => seg.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^\.+/, "").trim().slice(0, 80))
+    .filter(Boolean);
+  return clean.length ? `${clean.join("/")}/` : "";
 }
 
 export interface SkippedZipFile {
@@ -156,19 +170,19 @@ export function normalizeStoragePath(raw: string): string {
   return trimmed.replace(/^\/+/, "");
 }
 
-function uniqueZipEntryName(rawName: string, used: Set<string>): string {
+function uniqueZipEntryName(rawName: string, used: Set<string>, dir = ""): string {
   const safe = sanitizeStorageFileName(rawName);
-  if (!used.has(safe)) {
-    used.add(safe);
+  if (!used.has(dir + safe)) {
+    used.add(dir + safe);
     return safe;
   }
   const dot = safe.lastIndexOf(".");
   const base = dot > 0 ? safe.slice(0, dot) : safe;
   const ext = dot > 0 ? safe.slice(dot) : "";
   let i = 2;
-  while (used.has(`${base}-${i}${ext}`)) i++;
+  while (used.has(`${dir}${base}-${i}${ext}`)) i++;
   const unique = `${base}-${i}${ext}`;
-  used.add(unique);
+  used.add(dir + unique);
   return unique;
 }
 
@@ -445,9 +459,10 @@ export function createProjectZipStream(
           mlsFallbacks.push(entryBase);
         }
 
-        const entryName = uniqueZipEntryName(entryBase, usedNames);
+        const dir = zipDirPrefix(asset.zip_dir);
+        const entryName = uniqueZipEntryName(entryBase, usedNames, dir);
         await Promise.race([
-          appendStreamToArchive(archive, result.file.stream, `${ZIP_FOLDER}/${entryName}`),
+          appendStreamToArchive(archive, result.file.stream, `${ZIP_FOLDER}/${dir}${entryName}`),
           archiveError,
         ]);
         fileCount++;
