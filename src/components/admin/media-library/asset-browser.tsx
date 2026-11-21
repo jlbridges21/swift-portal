@@ -74,8 +74,8 @@ import {
 import { AddToFolderDialog, FolderNameDialog } from "@/components/admin/media-library/folder-dialogs";
 import {
   changeFolderItems,
-  movedToFolderMessage,
   createLibraryFolderRequest,
+  showMoveToast,
   type FolderPermissions,
 } from "@/components/admin/media-library/folder-client";
 
@@ -136,7 +136,10 @@ export type AssetBrowserProps = {
   initialKindCounts: KindCounts;
   initialQuery?: string;
   filterOptions: LibraryFilterOptions;
+  /** Every folder with parentId and its own name (the move dialog browses the tree). */
   folders: LibraryFolderSummary[];
+  /** Migration v136: folders can hold folders. */
+  subfoldersSupported?: boolean;
   foldersReady: boolean;
   permissions: FolderPermissions;
   /** Bumped by the workspace after uploads / folder changes to reload page 1. */
@@ -148,6 +151,8 @@ export type AssetBrowserProps = {
   onUpload: () => void;
   /** "Add from library" mode: pick media for this folder, then return to it. */
   pickForFolder?: { id: string; name: string } | null;
+  /** Bumped after media is dragged onto a folder: the moved items shouldn't stay selected. */
+  selectionResetSignal?: number;
   onTotalChange?: (total: number) => void;
   /** Shown between the filters and the search/sort toolbar (e.g. the folder strip). */
   belowFilters?: React.ReactNode;
@@ -162,6 +167,7 @@ export function AssetBrowser({
   initialQuery = "",
   filterOptions,
   folders,
+  subfoldersSupported = false,
   foldersReady,
   permissions,
   reloadSignal,
@@ -169,6 +175,7 @@ export function AssetBrowser({
   onShareFolder,
   onUpload,
   pickForFolder = null,
+  selectionResetSignal = 0,
   onTotalChange,
   belowFilters,
 }: AssetBrowserProps) {
@@ -291,6 +298,10 @@ export function AssetBrowser({
     }
   }, [fetchPage, filterQuery]);
 
+  useEffect(() => {
+    if (selectionResetSignal) setSelection(EMPTY_SELECTION);
+  }, [selectionResetSignal]);
+
   const firstReload = useRef(true);
   useEffect(() => {
     if (firstReload.current) {
@@ -396,8 +407,12 @@ export function AssetBrowser({
     setBusyLabel(`Moving to “${folder.name}”…`);
     try {
       const r = await changeFolderItems(folder.id, keys, "move");
-      toast.success(movedToFolderMessage(folder.name, r), {
-        action: inFolder?.id === folder.id ? undefined : { label: "Open", onClick: () => router.push(`/admin/media/folders/${folder.id}`) },
+      showMoveToast(folder, r, {
+        onOpen: inFolder?.id === folder.id ? undefined : () => router.push(`/admin/media/folders/${folder.id}`),
+        onUndone: () => {
+          onFoldersChanged();
+          if (inFolder) void fetchPage(1, true);
+        },
       });
       onFoldersChanged();
       if (inFolder?.id === folder.id) {
@@ -965,11 +980,12 @@ export function AssetBrowser({
         open={addDialog !== null}
         count={addDialog?.keys.length ?? 0}
         folders={folders}
-        excludeFolderId={inFolder?.id}
+        currentFolderId={inFolder?.id ?? null}
+        canNest={subfoldersSupported}
         onClose={() => setAddDialog(null)}
         onPick={(folder) => moveKeysToFolder(folder, addDialog?.keys ?? [])}
-        onCreate={async (name) => {
-          const result = await createLibraryFolderRequest(name);
+        onCreate={async (name, parentId) => {
+          const result = await createLibraryFolderRequest(name, parentId);
           if (typeof result !== "string") onFoldersChanged();
           return result;
         }}
@@ -1199,13 +1215,96 @@ function Thumb({ asset, thumbUrl, sizes }: { asset: LibraryAsset; thumbUrl?: str
   );
 }
 
+/**
+ * Drag preview: the dragged card's thumbnail (stacked when several items are carried) and
+ * "Moving N items", so a drag that carries the whole selection is obvious. Built off-screen
+ * inside the card's themed surface (brand colors, dark mode), captured by the browser, then removed.
+ */
+function setLibraryDragImage(e: React.DragEvent<HTMLElement>, count: number) {
+  if (typeof e.dataTransfer.setDragImage !== "function") return;
+  const host = e.currentTarget.closest("[data-surface]") ?? document.body;
+  const src = e.currentTarget.querySelector("img")?.currentSrc || null;
+
+  const badge = document.createElement("div");
+  badge.setAttribute("aria-hidden", "true");
+  Object.assign(badge.style, {
+    position: "fixed",
+    top: "-1000px",
+    left: "-1000px",
+    zIndex: "2147483647",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: count > 1 ? "8px 14px 8px 8px" : "6px 14px 6px 6px",
+    borderRadius: "14px",
+    background: "var(--color-card, #fff)",
+    color: "var(--color-heading, #0f172a)",
+    border: "1px solid var(--color-border, #e2e8f0)",
+    boxShadow: "0 10px 30px -8px rgba(15, 23, 42, 0.35)",
+    font: "600 13px/1.2 system-ui, -apple-system, sans-serif",
+    whiteSpace: "nowrap",
+    pointerEvents: "none",
+  } satisfies Partial<CSSStyleDeclaration>);
+
+  const thumb = document.createElement("div");
+  Object.assign(thumb.style, {
+    position: "relative",
+    width: "44px",
+    height: "44px",
+    flexShrink: "0",
+    borderRadius: "10px",
+    backgroundColor: "var(--color-accent-subtle, #eff6ff)",
+    backgroundImage: src ? `url("${src.replace(/"/g, "%22")}")` : "",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    // Paper-stack edges behind the thumbnail when several items move together.
+    boxShadow:
+      count > 1
+        ? "3px 3px 0 -1px var(--color-card, #fff), 3px 3px 0 0 var(--color-border, #cbd5e1), 6px 6px 0 -1px var(--color-card, #fff), 6px 6px 0 0 var(--color-border, #cbd5e1)"
+        : "",
+  } satisfies Partial<CSSStyleDeclaration>);
+  if (count > 1) {
+    const pill = document.createElement("span");
+    pill.textContent = count > 999 ? "999+" : String(count);
+    Object.assign(pill.style, {
+      position: "absolute",
+      top: "-8px",
+      right: "-10px",
+      minWidth: "22px",
+      height: "22px",
+      padding: "0 6px",
+      borderRadius: "999px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "var(--color-accent, #3b82f6)",
+      color: "var(--color-accent-foreground, #fff)",
+      font: "700 12px/1 system-ui, -apple-system, sans-serif",
+      boxShadow: "0 0 0 2px var(--color-card, #fff)",
+    } satisfies Partial<CSSStyleDeclaration>);
+    thumb.appendChild(pill);
+  }
+
+  const label = document.createElement("span");
+  label.textContent = count === 1 ? "Moving 1 item" : `Moving ${count.toLocaleString()} items`;
+  if (count > 1) label.style.marginLeft = "6px";
+
+  badge.append(thumb, label);
+  host.appendChild(badge);
+  e.dataTransfer.setDragImage(badge, 22, 22);
+  // The browser snapshots the element synchronously; it can go on the next frame.
+  requestAnimationFrame(() => badge.remove());
+}
+
 function dragProps(dragKeys: (() => string[]) | undefined) {
   if (!dragKeys) return {};
   return {
     draggable: true,
-    onDragStart: (e: React.DragEvent) => {
+    onDragStart: (e: React.DragEvent<HTMLElement>) => {
       const keys = dragKeys();
-      e.dataTransfer.effectAllowed = "copy";
+      setLibraryDragImage(e, keys.length);
+      // "move" must match the dropEffect folder targets set, or the browser cancels the drop.
+      e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData(LIBRARY_DRAG_MIME, JSON.stringify(keys));
       e.dataTransfer.setData("text/plain", keys.length === 1 ? "1 item" : `${keys.length} items`);
     },

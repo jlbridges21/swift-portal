@@ -54,7 +54,7 @@ import { LibrarySearch } from "@/components/admin/media-library/library-filters"
 import { ViewModeToggle, shortDate, useStoredViewMode, useThumbUrls } from "@/components/admin/media-library/library-ui";
 import {
   changeFolderItems,
-  movedToFolderMessage,
+  showMoveToast,
   createLibraryFolderRequest,
   deleteLibraryFolderRequest,
   fetchLibraryFolders,
@@ -160,6 +160,7 @@ export function MediaLibraryWorkspace({
   const [currentFolder, setCurrentFolder] = useState(initialFolder);
   const [uploadOpen, setUploadOpen] = useState(openUploadOnMount);
   const [reloadSignal, setReloadSignal] = useState(0);
+  const [selectionResetSignal, setSelectionResetSignal] = useState(0);
   const [nameDialog, setNameDialog] = useState<
     { mode: "create"; parent?: { id: string; name: string } | null } | { mode: "rename"; folder: LibraryFolderSummary } | null
   >(null);
@@ -236,8 +237,16 @@ export function MediaLibraryWorkspace({
     if (!permissions.organize || !keys.length || target.id === currentFolder?.id) return;
     try {
       const r = await changeFolderItems(target.id, keys, "move");
-      toast.success(movedToFolderMessage(target.name, r));
+      showMoveToast(target, r, {
+        onOpen: () => router.push(folderHref(target.id)),
+        onUndone: () => {
+          refreshFolders();
+          if (currentFolder) setReloadSignal((n) => n + 1);
+        },
+      });
       refreshFolders();
+      setSelectionResetSignal((n) => n + 1);
+      // A folder view drops the moved items (All Media keeps its scroll position).
       if (currentFolder) setReloadSignal((n) => n + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't move to the folder.");
@@ -701,14 +710,16 @@ export function MediaLibraryWorkspace({
           initialKindCounts={browser.initialKindCounts}
           initialQuery={browser.initialQuery}
           filterOptions={filterOptions}
-          folders={pathFolders}
+          folders={folders}
+          subfoldersSupported={subfoldersSupported}
           foldersReady={foldersReady}
           permissions={permissions}
           reloadSignal={reloadSignal}
           onFoldersChanged={refreshFolders}
           onShareFolder={openFolderShare}
-          onUpload={() => setUploadOpen(true)}
+          onUpload={() => openUpload(currentFolder?.id ?? null)}
           pickForFolder={pickForFolder}
+          selectionResetSignal={selectionResetSignal}
           belowFilters={folderStrip}
         />
       ) : null}
@@ -775,6 +786,11 @@ export function MediaLibraryWorkspace({
         folder={moving}
         folders={folders}
         onClose={() => setMoving(null)}
+        onCreate={async (name, parentId) => {
+          const created = await createLibraryFolderRequest(name, parentId);
+          if (typeof created !== "string") refreshFolders();
+          return created;
+        }}
         onMove={async (parentId) => {
           if (!moving) return null;
           const err = await moveFolder(moving.id, parentId);

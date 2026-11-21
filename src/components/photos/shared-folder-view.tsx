@@ -27,6 +27,7 @@ import {
   SharedNewFolderButton,
   SharedUploadButton,
   UploadTray,
+  isExternalFileDrag,
   useSharedFolderUploader,
   useWindowFileDrop,
 } from "@/components/photos/shared-folder-uploader";
@@ -487,7 +488,7 @@ function FolderCard({
   const contents =
     folder.itemCount || folder.subfolderCount ? countsLine(folder.subfolderCount, folder.itemCount, true) : "Empty folder";
 
-  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  const hasFiles = (e: React.DragEvent) => isExternalFileDrag(e);
   const dropProps = onUpload
     ? {
         onDragOver: (e: React.DragEvent) => {
