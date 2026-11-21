@@ -845,10 +845,19 @@ export function AssetBrowser({
                     <BulkButton icon={Share2} label="Share" disabled={bulkBusy} onClick={() => void bulkShare()} />
                   ) : null}
                   <BulkButton icon={Download} label="Download" disabled={bulkBusy} onClick={() => void bulkDownload()} />
+                  {inFolder && permissions.organize ? (
+                    <BulkButton
+                      icon={FolderMinus}
+                      label="Remove from folder"
+                      shortLabel="Remove"
+                      disabled={bulkBusy}
+                      onClick={() => void bulkRemoveFromFolder()}
+                    />
+                  ) : null}
                   {permissions.deleteMedia ? (
                     <BulkButton icon={Trash2} label="Delete" tone="danger" disabled={bulkBusy} onClick={() => void bulkDelete()} />
                   ) : null}
-                  {(inFolder && permissions.organize) || selectedPhotoCount > 0 ? (
+                  {selectedPhotoCount > 0 ? (
                     <button
                       type="button"
                       disabled={bulkBusy}
@@ -882,17 +891,6 @@ export function AssetBrowser({
         onClose={() => setBulkMenu(null)}
         title="More actions"
         items={[
-          ...(inFolder && permissions.organize
-            ? ([
-                {
-                  id: "remove",
-                  label: "Remove from folder",
-                  description: "Keeps the originals in their projects",
-                  icon: FolderMinus,
-                  onSelect: () => void bulkRemoveFromFolder(),
-                },
-              ] satisfies ActionMenuItem[])
-            : []),
           ...(selectedPhotoCount > 0
             ? ([
                 {
@@ -1148,12 +1146,15 @@ export function AssetBrowser({
 function BulkButton({
   icon: Icon,
   label,
+  shortLabel,
   onClick,
   disabled,
   tone = "default",
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  /** Shown instead of `label` until xl, where the bar is narrower. */
+  shortLabel?: string;
   onClick: () => void;
   disabled?: boolean;
   tone?: "default" | "danger";
@@ -1171,7 +1172,14 @@ function BulkButton({
       )}
     >
       <Icon className="h-4 w-4" />
-      <span className="hidden md:inline">{label}</span>
+      {shortLabel ? (
+        <>
+          <span className="hidden md:inline xl:hidden">{shortLabel}</span>
+          <span className="hidden xl:inline">{label}</span>
+        </>
+      ) : (
+        <span className="hidden md:inline">{label}</span>
+      )}
     </button>
   );
 }
