@@ -1,4 +1,5 @@
 /** Browser-side calls for Media Library folders (all authorization is server-side). */
+import { toast } from "sonner";
 import type { LibraryFolderSummary } from "@/lib/library-folder-types";
 
 const CHUNK = 500;
@@ -58,7 +59,13 @@ export async function deleteLibraryFolderRequest(id: string): Promise<string | n
   return res.ok ? null : errorMessage(res, "Couldn't delete the folder.");
 }
 
-export type FolderItemsResult = { changed: number; unchanged: number; skipped: number };
+/** What a move changed (from the server), so it can be undone. */
+export type FolderMoveUndo = {
+  added: string[];
+  restore: { folderId: string; key: string; addedAt: string | null }[];
+};
+
+export type FolderItemsResult = { changed: number; unchanged: number; skipped: number; undo?: FolderMoveUndo };
 
 /**
  * Add, move or remove "kind:id" keys in chunks. Throws with a readable message on failure.
@@ -79,7 +86,12 @@ export async function changeFolderItems(folderId: string, keys: string[], mode: 
         await errorMessage(res, mode === "remove" ? "Couldn't remove from the folder." : mode === "move" ? "Couldn't move to the folder." : "Couldn't add to the folder.")
       );
     }
-    const json = (await res.json()) as { added?: number; alreadyInFolder?: number; removed?: number; skipped?: number };
+    const json = (await res.json()) as { added?: number; alreadyInFolder?: number; removed?: number; skipped?: number; undo?: FolderMoveUndo };
+    if (mode === "move" && json.undo) {
+      out.undo ??= { added: [], restore: [] };
+      out.undo.added.push(...json.undo.added);
+      out.undo.restore.push(...json.undo.restore);
+    }
     if (mode !== "remove") {
       out.changed += json.added ?? 0;
       out.unchanged += json.alreadyInFolder ?? 0;
@@ -105,4 +117,69 @@ export function addedToFolderMessage(folderName: string, r: FolderItemsResult): 
   if (r.unchanged) parts.push(`${r.unchanged.toLocaleString()} already there`);
   if (r.skipped) parts.push(`${r.skipped.toLocaleString()} skipped`);
   return parts.join(" · ");
+}
+
+/** A move that changed nothing (everything was already only there) has nothing to undo. */
+export function canUndoMove(undo: FolderMoveUndo | undefined): undo is FolderMoveUndo {
+  return Boolean(undo && (undo.added.length || undo.restore.length));
+}
+
+/**
+ * Undo a move into `folderId`: newly added items leave it, and every item goes back into the
+ * folders it was taken out of. Sent in chunks of up to 500 items. Throws on failure.
+ */
+export async function undoFolderMove(folderId: string, undo: FolderMoveUndo): Promise<{ removed: number; restored: number; skipped: number }> {
+  const out = { removed: 0, restored: 0, skipped: 0 };
+  const keys = [...new Set([...undo.added, ...undo.restore.map((r) => r.key)])];
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const part = new Set(keys.slice(i, i + CHUNK));
+    const res = await fetch(`/api/library-folders/${folderId}/items/undo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        added: undo.added.filter((k) => part.has(k)),
+        restore: undo.restore.filter((r) => part.has(r.key)),
+      }),
+    });
+    if (!res.ok) throw new Error(await errorMessage(res, "Couldn't undo the move."));
+    const json = (await res.json()) as { removed?: number; restored?: number; skipped?: number };
+    out.removed += json.removed ?? 0;
+    out.restored += json.restored ?? 0;
+    out.skipped += json.skipped ?? 0;
+  }
+  return out;
+}
+
+/**
+ * "Moved 12 to “Raw”" with Undo (and Open, when given). Undo puts every item back where it was;
+ * `onUndone` refreshes whatever the caller shows.
+ */
+export function showMoveToast(
+  folder: { id: string; name: string },
+  r: FolderItemsResult,
+  opts: { onOpen?: () => void; onUndone: () => void }
+) {
+  const undo = r.undo;
+  toast.success(movedToFolderMessage(folder.name, r), {
+    duration: canUndoMove(undo) ? 10_000 : undefined,
+    action: canUndoMove(undo)
+      ? {
+          label: "Undo",
+          onClick: () => {
+            const id = toast.loading("Undoing the move…");
+            void undoFolderMove(folder.id, undo)
+              .then((u) => {
+                toast.success(`Moved back out of “${folder.name}”`, {
+                  id,
+                  description: u.skipped ? `${u.skipped.toLocaleString()} couldn't go back (folder deleted or no access).` : undefined,
+                });
+                opts.onUndone();
+              })
+              .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't undo the move.", { id }));
+          },
+        }
+      : undefined,
+    cancel: opts.onOpen ? { label: "Open", onClick: opts.onOpen } : undefined,
+  });
 }

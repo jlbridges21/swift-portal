@@ -82,7 +82,10 @@ export function useFolderDropTarget(
         e.dataTransfer.dropEffect = "move";
         if (!over) setOver(true);
       },
-      onDragLeave: () => setOver(false),
+      // Moving between the card's own children isn't leaving it (avoids the highlight flickering).
+      onDragLeave: (e: React.DragEvent) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      },
       onDrop: (e: React.DragEvent) => {
         setOver(false);
         const folderId = onDropFolder ? e.dataTransfer.getData(LIBRARY_FOLDER_DRAG_MIME) : "";

@@ -16,6 +16,7 @@ import type { LibraryAssetKind } from "@/lib/media-library";
 import {
   LIBRARY_FOLDER_ITEMS_PER_REQUEST,
   libraryItemColumn,
+  libraryItemKey,
   type LibraryFolderSummary,
   type LibraryItemRef,
 } from "@/lib/library-folder-types";
@@ -580,16 +581,22 @@ export async function addLibraryFolderItems(
   folderId: string,
   refs: LibraryItemRef[],
   actorId: string | null
-): Promise<{ added: number; alreadyInFolder: number }> {
+): Promise<{ added: number; alreadyInFolder: number; addedKeys: string[] }> {
   if (refs.length > LIBRARY_FOLDER_ITEMS_PER_REQUEST) {
     throw new LibraryFolderError(`Add up to ${LIBRARY_FOLDER_ITEMS_PER_REQUEST} items at a time.`, 400);
   }
   const folder = await getLibraryFolder(businessId, folderId);
   if (!folder) throw new LibraryFolderError("Folder not found.", 404);
-  if (!refs.length) return { added: 0, alreadyInFolder: 0 };
+  if (!refs.length) return { added: 0, alreadyInFolder: 0, addedKeys: [] };
 
   const db = await createTenantServiceClient(businessId);
   let added = 0;
+  const addedKeys: string[] = [];
+  const keyOf = new Map(refs.map((r) => [`${libraryItemColumn(r.kind)}:${r.id}`, libraryItemKey(r)]));
+  const noteAdded = (column: string, id: string) => {
+    added += 1;
+    addedKeys.push(keyOf.get(`${column}:${id}`) ?? id);
+  };
   // One insert per column kind so each uses its own partial unique index for ON CONFLICT.
   const groups: Record<"media_asset_id" | "tour_id" | "model_id", string[]> = { media_asset_id: [], tour_id: [], model_id: [] };
   for (const r of refs) groups[libraryItemColumn(r.kind)].push(r.id);
@@ -608,23 +615,23 @@ export async function addLibraryFolderItems(
       const have = new Set(((existing ?? []) as unknown as Record<string, string>[]).map((r) => r[column]));
       const rows = part.filter((id) => !have.has(id)).map((id) => ({ folder_id: folderId, [column]: id, added_by: actorId }));
       if (!rows.length) continue;
-      const { data, error } = await db.from("library_folder_items").insert(rows).select("id");
+      const { error } = await db.from("library_folder_items").insert(rows);
       if (error) {
         if (error.code !== "23505") fail(error, "Couldn't add to the folder.");
         // Raced with another add — fall back to one-by-one so the rest still land.
         for (const row of rows) {
           const { error: oneErr } = await db.from("library_folder_items").insert(row);
-          if (!oneErr) added += 1;
+          if (!oneErr) noteAdded(column, row[column] as string);
           else if (oneErr.code !== "23505") fail(oneErr, "Couldn't add to the folder.");
         }
       } else {
-        added += data?.length ?? rows.length;
+        for (const row of rows) noteAdded(column, row[column] as string);
       }
     }
   }
   if (added) await touchFolder(db, folderId);
   const unique = new Set(refs.map((r) => `${libraryItemColumn(r.kind)}:${r.id}`)).size;
-  return { added, alreadyInFolder: Math.max(0, unique - added) };
+  return { added, alreadyInFolder: Math.max(0, unique - added), addedKeys };
 }
 
 /** Remove references only — the assets themselves are never touched. */
@@ -638,11 +645,13 @@ export async function moveIntoLibraryFolder(
   folderId: string,
   refs: LibraryItemRef[],
   actorId: string | null
-): Promise<{ added: number; alreadyInFolder: number; movedFrom: number }> {
+): Promise<{ added: number; alreadyInFolder: number; movedFrom: number; undo: LibraryFolderMoveUndo }> {
   const result = await addLibraryFolderItems(businessId, folderId, refs, actorId);
   const db = await createTenantServiceClient(businessId);
   let movedFrom = 0;
   const touched = new Set<string>();
+  const restore: LibraryFolderMoveUndo["restore"] = [];
+  const keyOf = new Map(refs.map((r) => [`${libraryItemColumn(r.kind)}:${r.id}`, libraryItemKey(r)]));
   const groups: Record<"media_asset_id" | "tour_id" | "model_id", string[]> = { media_asset_id: [], tour_id: [], model_id: [] };
   for (const r of refs) groups[libraryItemColumn(r.kind)].push(r.id);
   for (const [column, ids] of Object.entries(groups) as ["media_asset_id" | "tour_id" | "model_id", string[]][]) {
@@ -652,14 +661,80 @@ export async function moveIntoLibraryFolder(
         .delete()
         .neq("folder_id", folderId)
         .in(column, part)
-        .select("folder_id");
+        .select(`folder_id, ${column}, added_at`);
       if (error) fail(error, "Moved into the folder, but couldn't take the items out of their old folders.");
-      movedFrom += data?.length ?? 0;
-      for (const row of (data ?? []) as { folder_id: string }[]) touched.add(row.folder_id);
+      const rows = (data ?? []) as unknown as Record<string, string>[];
+      movedFrom += rows.length;
+      for (const row of rows) {
+        touched.add(row.folder_id);
+        restore.push({ folderId: row.folder_id, key: keyOf.get(`${column}:${row[column]}`) ?? row[column], addedAt: row.added_at ?? null });
+      }
     }
   }
   for (const id of touched) await touchFolder(db, id);
-  return { ...result, movedFrom };
+  return { added: result.added, alreadyInFolder: result.alreadyInFolder, movedFrom, undo: { added: result.addedKeys, restore } };
+}
+
+/**
+ * What a move changed, so the portal can offer Undo: the items it newly put in the target
+ * folder, and every membership it took away (folder, item, original added_at).
+ */
+export type LibraryFolderMoveUndo = {
+  added: string[];
+  restore: { folderId: string; key: string; addedAt: string | null }[];
+};
+
+/**
+ * Undo a move: take the newly added items back out of `folderId` and put the items back in the
+ * folders they came from, keeping their original "added" time so order and covers return too.
+ * Callers authorize the refs and the folders being restored into. Folders deleted since are
+ * skipped. Returns how many memberships came back.
+ */
+export async function undoLibraryFolderMove(
+  businessId: string,
+  folderId: string,
+  added: LibraryItemRef[],
+  restore: { folderId: string; ref: LibraryItemRef; addedAt: string | null }[],
+  actorId: string | null
+): Promise<{ removed: number; restored: number }> {
+  const { removed } = added.length ? await removeLibraryFolderItems(businessId, folderId, added) : { removed: 0 };
+  if (!restore.length) return { removed, restored: 0 };
+  const db = await createTenantServiceClient(businessId);
+  const folderIds = [...new Set(restore.map((r) => r.folderId))];
+  const alive = new Set<string>();
+  for (const part of chunk(folderIds, IN_CHUNK)) {
+    const { data } = await db.from("library_folders").select("id").in("id", part);
+    for (const r of (data ?? []) as { id: string }[]) alive.add(r.id);
+  }
+  let restored = 0;
+  const touched = new Set<string>();
+  for (const target of folderIds.filter((id) => alive.has(id))) {
+    const entries = restore.filter((r) => r.folderId === target);
+    for (const column of ["media_asset_id", "tour_id", "model_id"] as const) {
+      const list = entries.filter((e) => libraryItemColumn(e.ref.kind) === column);
+      for (const part of chunk(list, IN_CHUNK)) {
+        const { data: existing, error: exErr } = await db
+          .from("library_folder_items")
+          .select(column)
+          .eq("folder_id", target)
+          .in(column, part.map((e) => e.ref.id));
+        if (exErr) fail(exErr, "Couldn't undo the move.");
+        const have = new Set(((existing ?? []) as unknown as Record<string, string>[]).map((r) => r[column]));
+        const seen = new Set<string>();
+        const rows = part
+          .filter((e) => !have.has(e.ref.id) && !seen.has(e.ref.id) && seen.add(e.ref.id))
+          .map((e) => ({ folder_id: target, [column]: e.ref.id, added_by: actorId, ...(e.addedAt ? { added_at: e.addedAt } : {}) }));
+        for (const row of rows) {
+          const { error } = await db.from("library_folder_items").insert(row);
+          if (!error) restored += 1;
+          else if (error.code !== "23505") fail(error, "Couldn't undo the move.");
+        }
+        if (rows.length) touched.add(target);
+      }
+    }
+  }
+  for (const id of touched) await touchFolder(db, id);
+  return { removed, restored };
 }
 
 export async function removeLibraryFolderItems(

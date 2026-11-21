@@ -343,13 +343,36 @@ export function SharedNewFolderButton({ token, folderId, folderName }: { token: 
   );
 }
 
+/**
+ * A drag that started on this page (a photo tile, a folder cover, a link). Chrome attaches a
+ * dragged <img> as a file, so without this check dragging a photo onto a folder card would
+ * upload a fresh copy of it. Files dragged in from the desktop never fire dragstart here.
+ */
+let pageDragActive = false;
+let pageDragTracking = false;
+function trackPageDrags() {
+  if (pageDragTracking || typeof window === "undefined") return;
+  pageDragTracking = true;
+  window.addEventListener("dragstart", () => (pageDragActive = true), true);
+  const clear = () => (pageDragActive = false);
+  window.addEventListener("dragend", clear, true);
+  window.addEventListener("drop", () => setTimeout(clear, 0), true);
+}
+
+/** Files dragged in from outside the page (the desktop, Finder, another app). */
+export function isExternalFileDrag(e: { dataTransfer: DataTransfer | null }): boolean {
+  trackPageDrags();
+  return !pageDragActive && Array.from(e.dataTransfer?.types ?? []).includes("Files");
+}
+
 /** Full-window drop target: shows an overlay while files are dragged over the page. */
 export function useWindowFileDrop(onFiles: (files: FileList) => void, enabled: boolean) {
   const [dragging, setDragging] = useState(false);
   const depth = useRef(0);
   useEffect(() => {
     if (!enabled) return;
-    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    trackPageDrags();
+    const hasFiles = (e: DragEvent) => isExternalFileDrag(e);
     const onEnter = (e: DragEvent) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
