@@ -72,6 +72,7 @@ import {
   useStoredViewMode,
 } from "@/components/admin/media-library/library-ui";
 import { AddToFolderDialog, FolderNameDialog } from "@/components/admin/media-library/folder-dialogs";
+import { useMarqueeSelect } from "@/components/admin/media-library/use-marquee-select";
 import {
   changeFolderItems,
   createLibraryFolderRequest,
@@ -367,6 +368,34 @@ export function AssetBrowser({
   function exitSelect() {
     setSelection(EMPTY_SELECTION);
   }
+
+  // ── Rubber-band selection (desktop): drag a rectangle over empty space ──
+  const zoneRef = useRef<HTMLDivElement>(null);
+  const marqueeBase = useRef<Selection>(EMPTY_SELECTION);
+  const marqueeBox = useMarqueeSelect({
+    zoneRef,
+    enabled: assets.length > 0,
+    onBegin: () => {
+      marqueeBase.current = selectionRef.current;
+    },
+    onChange: (keys, additive) => {
+      const base = marqueeBase.current;
+      if (!additive) {
+        setSelection({ mode: "ids", keys: new Set(keys) });
+      } else if (base.mode === "all") {
+        const excluded = new Set(base.excluded);
+        for (const k of keys) excluded.delete(k);
+        setSelection({ ...base, excluded });
+      } else {
+        setSelection({ mode: "ids", keys: new Set([...base.keys, ...keys]) });
+      }
+    },
+    onCancel: () => setSelection(marqueeBase.current),
+    onClickEmpty: () => {
+      const cur = selectionRef.current;
+      if (cur.mode === "all" || cur.keys.size > 0) setSelection(EMPTY_SELECTION);
+    },
+  });
 
   async function resolveSelection(): Promise<ResolvedItem[] | null> {
     if (selection.mode === "ids") {
@@ -675,7 +704,8 @@ export function AssetBrowser({
   const libraryEmpty = !filtered && total === 0 && !loading && !loadError;
 
   return (
-    <div className={cn("min-w-0 space-y-4", selectMode && "pb-32 sm:pb-24")}>
+    <div ref={zoneRef} className={cn("min-w-0 space-y-4", selectMode && "pb-32 sm:pb-24")}>
+      {marqueeBox}
       {pickForFolder ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent-subtle/60 p-3 sm:flex-row sm:items-center sm:p-4">
           <FolderPlus className="hidden h-5 w-5 shrink-0 text-accent sm:block" aria-hidden />
@@ -749,6 +779,7 @@ export function AssetBrowser({
           className="media-bulk-bar fixed left-[calc(var(--admin-sidebar-w,0px)+0.75rem)] right-3 z-40 mx-auto max-w-5xl rounded-2xl border border-border bg-card/95 px-3 py-2.5 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.35)] backdrop-blur sm:px-4"
           role="toolbar"
           aria-label="Selection actions"
+          data-no-marquee
         >
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             <button
@@ -1052,6 +1083,7 @@ export function AssetBrowser({
       </ConfirmDialog>
 
       {drawerAsset ? (
+        <div data-no-marquee>
         <AssetDrawer
           asset={drawerAsset}
           projects={filterOptions.projects}
@@ -1105,6 +1137,7 @@ export function AssetBrowser({
             </div>
           }
         />
+        </div>
       ) : null}
 
       {photoShare.dialog}
@@ -1353,6 +1386,7 @@ function MediaCard({ asset, thumbUrl, onVisible, selectMode, selected, onToggle,
   return (
     <div
       ref={ref}
+      data-marquee-key={assetKey(asset)}
       {...dragProps(dragKeys)}
       className={cn(
         "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:shadow-md",
@@ -1418,7 +1452,7 @@ function MediaRow({ asset, thumbUrl, onVisible, selectMode, selected, onToggle, 
   const ref = useRef<HTMLLIElement>(null);
   useVisible(ref, asset, onVisible);
   return (
-    <li ref={ref} {...dragProps(dragKeys)} className={cn("group relative flex min-w-0 items-center gap-3 px-2 py-2 sm:px-3", selected && "bg-accent-subtle/50")}>
+    <li ref={ref} data-marquee-key={assetKey(asset)} {...dragProps(dragKeys)} className={cn("group relative flex min-w-0 items-center gap-3 px-2 py-2 sm:px-3", selected && "bg-accent-subtle/50")}>
       <div className="relative shrink-0">
         <button
           type="button"
