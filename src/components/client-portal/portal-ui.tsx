@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -14,6 +16,7 @@ import { usePathname } from "next/navigation";
 import {
   ChevronDown,
   FolderKanban,
+  LogIn,
   LogOut,
   MessageSquare,
   Plus,
@@ -123,14 +126,21 @@ export function PortalPillButton({
   );
 }
 
+/**
+ * Batch thumbnail endpoint for the portal tree. Unset = the signed-in route; anonymous
+ * "Anyone with the link" pages provide `/api/public/link/{token}/media/thumbnails`.
+ */
+export const PortalThumbsEndpointContext = createContext<string | undefined>(undefined);
+
 /** Batched, cached signed thumbnail URLs for a handful of assets (sidebar previews, folder covers). */
 export function useThumbUrls(ids: string[]): Record<string, string> {
+  const endpoint = useContext(PortalThumbsEndpointContext);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const onUrls = useCallback(
     (next: Record<string, string>) => setUrls((prev) => ({ ...prev, ...next })),
     [],
   );
-  const queue = useMemo(() => createThumbRequestQueue(onUrls), [onUrls]);
+  const queue = useMemo(() => createThumbRequestQueue(onUrls, { endpoint }), [onUrls, endpoint]);
   useEffect(() => () => queue.reset(), [queue]);
   const key = ids.join(",");
   useEffect(() => {
@@ -188,6 +198,7 @@ export function PortalTopBar({
   userAvatar,
   children,
   preview = false,
+  signInHref,
 }: {
   title?: string;
   /** Project page: open the project chat drawer. Otherwise the Messages page link is used. */
@@ -200,7 +211,13 @@ export function PortalTopBar({
   children?: ReactNode;
   /** Business preview of the client view: no client account menu or notifications. */
   preview?: boolean;
+  /**
+   * Anonymous "Anyone with the link" viewer: brand only (no portal links), no messages,
+   * cart, notifications or account menu — just a sign-in button (needed to comment on videos).
+   */
+  signInHref?: string;
 }) {
+  const anonymous = Boolean(signInHref);
   const pathname = usePathname();
   const onHome = pathname === "/dashboard";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -210,12 +227,12 @@ export function PortalTopBar({
   }>({ name: userName, avatar: userAvatar });
   const menuRef = useRef<HTMLDivElement>(null);
   // Business previews of the client view would otherwise count the studio's own inbox.
-  const messagesUnread = useClientUnreadMessages(!preview);
+  const messagesUnread = useClientUnreadMessages(!preview && !anonymous);
   const messagesLabel =
     messagesUnread > 0 ? `Messages, ${messagesUnread} unread` : "Messages";
 
   useEffect(() => {
-    if (userName !== undefined || preview) return;
+    if (userName !== undefined || preview || anonymous) return;
     let cancelled = false;
     fetch("/api/profile", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
@@ -230,7 +247,7 @@ export function PortalTopBar({
     return () => {
       cancelled = true;
     };
-  }, [userName, preview]);
+  }, [userName, preview, anonymous]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -256,13 +273,13 @@ export function PortalTopBar({
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Logo
-            href="/dashboard"
+            href={anonymous ? "" : "/dashboard"}
             compact
             showText={false}
             className="flex sm:hidden"
           />
-          <Logo href="/dashboard" compact className="hidden sm:flex" />
-          {showMyProjects ? (
+          <Logo href={anonymous ? "" : "/dashboard"} compact className="hidden sm:flex" />
+          {showMyProjects && !anonymous ? (
             <Link
               href="/dashboard"
               aria-current={onHome ? "page" : undefined}
@@ -289,7 +306,15 @@ export function PortalTopBar({
           <div className="flex-1" />
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {onOpenMessages ? (
+          {anonymous ? (
+            <Link
+              href={signInHref!}
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-heading transition-colors hover:bg-accent-subtle hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <LogIn className="h-4 w-4" aria-hidden />
+              Sign in to comment
+            </Link>
+          ) : onOpenMessages ? (
             <button
               type="button"
               onClick={onOpenMessages}
@@ -311,7 +336,7 @@ export function PortalTopBar({
               <UnreadCountBadge count={messagesUnread} />
             </Link>
           )}
-          {preview ? null : (
+          {preview || anonymous ? null : (
             <>
               <div className="shrink-0">
                 <CartButton />

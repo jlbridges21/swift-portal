@@ -10,6 +10,7 @@ import { ProjectStorageLabel } from "@/components/admin/project-card-extras";
 import {
   formatCardDate,
   ProjectActionsButton,
+  type ProjectMenuActions,
   ServicePill,
   StagePill,
   type ClientViewProjectRow,
@@ -18,36 +19,42 @@ import { CLIENT_VIEW_STAGES, STAGE_ACCENTS } from "@/lib/client-view";
 import type { ProjectStatus } from "@/lib/constants";
 import type { ProjectStorageMap } from "@/lib/project-storage";
 import { projectPaymentStatus, type ProjectsSort } from "@/lib/projects-workspace";
+import { formatStorageSize } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
-import type { ActionMenuItem } from "@/components/ui/action-menu";
 import { SelectCheckbox } from "@/components/admin/projects-workspace/projects-bulk";
 
 type Move = (project: ClientViewProjectRow, next: ProjectStatus) => void;
+type MenuActions = (project: ClientViewProjectRow) => ProjectMenuActions | undefined;
 
-/** Resolve the streamed hero-poster map (undefined while loading). */
-export function useHeroUrls(promise?: Promise<Record<string, string | null>>) {
-  const [urls, setUrls] = useState<Record<string, string | null> | null | undefined>(undefined);
+/** Resolve a promise streamed from a Server Component (undefined while loading, null on failure/absent). */
+export function useStreamedValue<T>(promise?: Promise<T | null>): T | null | undefined {
+  const [value, setValue] = useState<T | null | undefined>(undefined);
   useEffect(() => {
     if (!promise) {
-      setUrls(null);
+      setValue(null);
       return;
     }
     let live = true;
     // A promise streamed from a Server Component arrives as a React thenable whose
     // .then() returns undefined — never chain .catch(); pass the rejection handler instead.
     promise.then(
-      (m) => {
-        if (live) setUrls(m);
+      (v) => {
+        if (live) setValue(v);
       },
       () => {
-        if (live) setUrls(null);
+        if (live) setValue(null);
       }
     );
     return () => {
       live = false;
     };
   }, [promise]);
-  return urls;
+  return value;
+}
+
+/** Resolve the streamed hero-poster map (undefined while loading). */
+export function useHeroUrls(promise?: Promise<Record<string, string | null>>) {
+  return useStreamedValue(promise);
 }
 
 function heroFor(urls: Record<string, string | null> | null | undefined, id: string): string | null | undefined {
@@ -83,12 +90,14 @@ function PipelineCard({
   storageBytes,
   canOpenClients,
   onMove,
+  menuActions,
 }: {
   project: ClientViewProjectRow;
   heroUrl: string | null | undefined;
   storageBytes?: Promise<ProjectStorageMap | null>;
   canOpenClients: boolean;
   onMove: Move;
+  menuActions?: MenuActions;
 }) {
   const date = formatCardDate(project);
   return (
@@ -122,7 +131,7 @@ function PipelineCard({
           </div>
         </div>
       </ProjectLink>
-      <ProjectActionsButton project={project} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-1.5 right-1.5" />
+      <ProjectActionsButton project={project} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(project)} className="absolute bottom-1.5 right-1.5" />
     </article>
   );
 }
@@ -139,6 +148,7 @@ export function ProjectsBoard({
   canCreateProject,
   onMove,
   scrollToStatus,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
@@ -147,6 +157,7 @@ export function ProjectsBoard({
   canCreateProject: boolean;
   onMove: Move;
   scrollToStatus?: ProjectStatus;
+  menuActions?: MenuActions;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
@@ -218,6 +229,7 @@ export function ProjectsBoard({
                       storageBytes={storageBytes}
                       canOpenClients={canOpenClients}
                       onMove={onMove}
+                      menuActions={menuActions}
                     />
                   </div>
                 ))}
@@ -270,15 +282,18 @@ const PAYMENT_LABEL = { paid: "Paid", pending: "Invoice pending", none: "—" } 
 export function ProjectsList({
   projects,
   heroUrls,
+  storage,
   sort,
   onSort,
   canOpenClients,
   onMove,
   selection,
-  rowActions,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
+  /** Resolved media-storage map (undefined while loading, null if it couldn't be measured). */
+  storage: ProjectStorageMap | null | undefined;
   sort: ProjectsSort;
   onSort: (s: ProjectsSort) => void;
   canOpenClients: boolean;
@@ -290,7 +305,7 @@ export function ProjectsList({
     toggleAll: () => void;
   };
   /** Extra ··· items per row (Hide / Restore). */
-  rowActions?: (p: ClientViewProjectRow) => ActionMenuItem[];
+  menuActions?: MenuActions;
 }) {
   const router = useRouter();
   const selectedShown = selection ? projects.filter((p) => selection.selected.has(p.id)).length : 0;
@@ -300,10 +315,11 @@ export function ProjectsList({
     { label: "Project", asc: "name_asc", desc: "name_desc", className: "w-auto" },
     { label: "Client", className: "hidden w-[15%] lg:table-cell" },
     { label: "Service", className: "hidden w-[11%] xl:table-cell" },
-    { label: "Status", className: "hidden w-[17%] md:table-cell" },
-    { label: "Shoot date", asc: "shoot_asc", desc: "shoot_desc", className: "hidden w-[14%] sm:table-cell" },
-    { label: "Payment", className: "hidden w-[12%] lg:table-cell" },
-    { label: "Updated", desc: "updated", className: "hidden w-[11%] xl:table-cell" },
+    { label: "Status", className: "hidden w-[16%] md:table-cell" },
+    { label: "Shoot date", asc: "shoot_asc", desc: "shoot_desc", className: "hidden w-[13%] sm:table-cell" },
+    { label: "Payment", className: "hidden w-[11%] lg:table-cell" },
+    { label: "Size", asc: "size_asc", desc: "size_desc", className: "hidden w-[8%] xl:table-cell" },
+    { label: "Updated", desc: "updated", className: "hidden w-[10%] xl:table-cell" },
   ];
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -367,9 +383,12 @@ export function ProjectsList({
                 <td className={cn("hidden px-3 py-2.5 text-xs lg:table-cell", pay === "pending" ? "font-semibold text-orange-600" : pay === "paid" ? "text-emerald-700 surface-dark:text-emerald-300" : "text-muted")}>
                   {PAYMENT_LABEL[pay]}
                 </td>
+                <td className="hidden px-3 py-2.5 xl:table-cell">
+                  <SizeCell bytes={storage === undefined ? undefined : storage ? storage[p.id] ?? 0 : null} />
+                </td>
                 <td className="hidden truncate px-3 py-2.5 text-xs text-muted xl:table-cell">{updated.format(new Date(p.updated_at))}</td>
                 <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} extraItems={rowActions?.(p)} />
+                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(p)} />
                 </td>
               </tr>
             );
@@ -377,6 +396,18 @@ export function ProjectsList({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** undefined = still loading (skeleton); null = couldn't be measured. */
+function SizeCell({ bytes }: { bytes: number | null | undefined }) {
+  if (bytes === undefined) return <span aria-hidden className="inline-block h-3 w-12 animate-pulse rounded bg-slate-200/80 surface-dark:bg-border/80" />;
+  if (bytes === null) return <span className="text-xs text-muted">—</span>;
+  const label = bytes > 0 ? formatStorageSize(bytes) : "0 MB";
+  return (
+    <span className={cn("whitespace-nowrap text-xs tabular-nums text-muted", bytes === 0 && "opacity-70")} title={`Media storage: ${label}`}>
+      {label}
+    </span>
   );
 }
 
@@ -388,12 +419,14 @@ export function ProjectsGrid({
   storageBytes,
   canOpenClients,
   onMove,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
   storageBytes?: Promise<ProjectStorageMap | null>;
   canOpenClients: boolean;
   onMove: Move;
+  menuActions?: MenuActions;
 }) {
   return (
     <ul className="grid min-w-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -436,7 +469,7 @@ export function ProjectsGrid({
                   <ProjectStorageLabel projectId={p.id} storage={storageBytes} className="block text-[11px]" />
                 </div>
               </ProjectLink>
-              <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-2 right-2" />
+              <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(p)} className="absolute bottom-2 right-2" />
             </article>
           </li>
         );

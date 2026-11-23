@@ -450,7 +450,7 @@ export function useProjectBulkActions({
     </>
   );
 
-  return { bar, dialogs, hide, restore, busy: !!busy };
+  return { bar, dialogs, hide, restore, assignStaff, confirmDelete: (projects: ClientViewProjectRow[]) => setConfirmDelete(projects), busy: !!busy };
 }
 
 function BulkButton({

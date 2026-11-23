@@ -4,12 +4,12 @@ import { projectServiceNames } from "@/lib/project-service-names";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArchiveRestore, EyeOff, FolderKanban, Plus, SearchX } from "lucide-react";
+import { ArchiveRestore, EyeOff, FolderKanban, Plus, SearchX, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CheckboxOption } from "@/components/ui/checkbox-dropdown";
 import { ClientView, type ClientViewPermissions } from "@/components/admin/client-view/client-view";
 import { ClientProfileModalProvider } from "@/components/admin/client-view/client-profile-modal";
-import { useProjectStageMove, type ClientViewProjectRow } from "@/components/admin/client-view/client-view-shared";
+import { useProjectStageMove, type ClientViewProjectRow, type ProjectMenuActions } from "@/components/admin/client-view/client-view-shared";
 import type { ActionMenuItem } from "@/components/ui/action-menu";
 import { STAFF_FILTER_UNASSIGNED, projectMatchesStaffFilter } from "@/components/admin/admin-projects-staff-filter";
 import type { PipelineProjectRow, PipelineStageParam } from "@/lib/admin-project-pipeline";
@@ -47,7 +47,7 @@ import {
   type ActiveChip,
   type FilterPanelState,
 } from "@/components/admin/projects-workspace/projects-toolbar";
-import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls } from "@/components/admin/projects-workspace/projects-views";
+import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls, useStreamedValue } from "@/components/admin/projects-workspace/projects-views";
 import { ProjectsCalendar, type ProjectsCalendarPermissions } from "@/components/admin/projects-workspace/projects-calendar";
 import { useProjectBulkActions, type ProjectBulkPermissions } from "@/components/admin/projects-workspace/projects-bulk";
 
@@ -196,7 +196,8 @@ export function ProjectsWorkspace({
     }),
     [panel]
   );
-  const shown = useMemo(() => sortProjects(filterProjects(moved, filters, search), sort), [moved, filters, search, sort]);
+  const storage = useStreamedValue(storageBytes);
+  const shown = useMemo(() => sortProjects(filterProjects(moved, filters, search), sort, storage), [moved, filters, search, sort, storage]);
   const serviceOptions = useMemo(
     () => [...new Set(projects.flatMap((p) => projectServiceNames(p)).filter(Boolean))].sort(),
     [projects]
@@ -251,14 +252,26 @@ export function ProjectsWorkspace({
         toggleAll: () => setSelected((cur) => (shown.length > 0 && shown.every((p) => cur.has(p.id)) ? new Set() : new Set(shown.map((p) => p.id)))),
       }
     : undefined;
-  const rowActions = (p: ClientViewProjectRow): ActionMenuItem[] =>
-    showDeleted
-      ? bulkPermissions.canRestore
-        ? [{ id: "restore", label: "Restore project", icon: ArchiveRestore, description: "Back to active projects", disabled: bulk.busy, onSelect: () => bulk.restore([p]) }]
-        : []
-      : bulkPermissions.canHide
-        ? [{ id: "hide", label: "Hide project", icon: EyeOff, description: "Moves it to Hidden Projects — nothing is deleted", disabled: bulk.busy, onSelect: () => bulk.hide([p]) }]
-        : [];
+  const menuActions = (p: ClientViewProjectRow): ProjectMenuActions => {
+    const items: ActionMenuItem[] = [];
+    if (showDeleted && bulkPermissions.canRestore) {
+      items.push({ id: "restore", label: "Restore project", icon: ArchiveRestore, disabled: bulk.busy, onSelect: () => bulk.restore([p]) });
+    }
+    if (!showDeleted && bulkPermissions.canHide) {
+      items.push({ id: "hide", label: "Hide project", icon: EyeOff, disabled: bulk.busy, onSelect: () => bulk.hide([p]) });
+    }
+    return {
+      disabled: bulk.busy || showDeleted || !bulkPermissions.canEdit,
+      assignStaff:
+        !showDeleted && bulkPermissions.canManageStaff && staff.length
+          ? { options: staff, onAssign: (m) => bulk.assignStaff([p], m) }
+          : undefined,
+      items,
+      dangerItems: bulkPermissions.canDelete
+        ? [{ id: "delete", label: "Delete project", icon: Trash2, destructive: true, disabled: bulk.busy, onSelect: () => bulk.confirmDelete([p]) }]
+        : undefined,
+    };
+  };
 
   const panelCount =
     (panel.statuses.length ? 1 : 0) +
@@ -389,16 +402,17 @@ export function ProjectsWorkspace({
             <ProjectsList
               projects={shown}
               heroUrls={hero}
+              storage={storage}
               sort={sort}
               onSort={changeSort}
               canOpenClients={canOpenClients}
               onMove={moveProject}
               selection={listSelection}
-              rowActions={rowActions}
+              menuActions={menuActions}
             />
           </div>
         ) : view === "grid" ? (
-          <ProjectsGrid projects={shown} heroUrls={hero} storageBytes={storageBytes} canOpenClients={canOpenClients} onMove={moveProject} />
+          <ProjectsGrid projects={shown} heroUrls={hero} storageBytes={storageBytes} canOpenClients={canOpenClients} onMove={moveProject} menuActions={menuActions} />
         ) : view === "calendar" ? (
           <ProjectsCalendar
             projects={shown}
@@ -427,6 +441,7 @@ export function ProjectsWorkspace({
               canCreateProject={!showDeleted && canCreateProject}
               onMove={moveProject}
               scrollToStatus={scrollToStatus}
+              menuActions={menuActions}
             />
           </>
         )}

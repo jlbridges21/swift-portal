@@ -21,11 +21,16 @@ import {
 } from "@/lib/video-review-media";
 import { listProjectVideoReviews } from "@/lib/video-reviews";
 import { resolvePublicLinkProject, type PublicLinkProjectContext } from "@/lib/project-link-access";
-import type { MediaAsset, MediaFolder, Tour, Project3dModel } from "@/lib/types";
+import { sanitizeProjectForMediaViewer } from "@/lib/project-page-access";
+import { resolveTourEmbedMap } from "@/lib/tour-embed-server";
+import type { MediaAsset, MediaFolder, Project, Tour, Project3dModel } from "@/lib/types";
 import type { VideoReviewListItem } from "@/lib/video-reviews";
 
 export type PublicProjectViewData = {
   ctx: PublicLinkProjectContext;
+  /** Same media-viewer field allowlist as email shares (no notes, token, client details). */
+  project: Project;
+  tourEmbedUrls: Record<string, string | null>;
   hero: Awaited<ReturnType<typeof getProjectHeroMedia>>;
   photos: MediaAsset[];
   videos: MediaAsset[];
@@ -49,8 +54,9 @@ export async function loadPublicProjectView(
   const raw = await createServiceClient();
   const db = await createTenantServiceClient(businessId);
 
-  const [{ data: media }, { data: tours }, { data: models }, { data: mediaFolders }] =
+  const [{ data: projectRow }, { data: media }, { data: tours }, { data: models }, { data: mediaFolders }] =
     await Promise.all([
+      db.from("projects").select("*").eq("id", projectId).maybeSingle(),
       db
         .from("media_assets")
         .select("*")
@@ -85,9 +91,12 @@ export async function loadPublicProjectView(
     photosSectionVisible: mediaSections.photos,
   });
   const appSettings = await getAppSettings(businessId);
+  if (!projectRow) return null;
 
   return {
     ctx,
+    project: sanitizeProjectForMediaViewer(projectRow as Project),
+    tourEmbedUrls: visibleTours.length ? await resolveTourEmbedMap(visibleTours) : {},
     hero,
     photos: visibleMedia.filter((m) => m.media_type === "photo"),
     videos: visibleMedia.filter((m) => m.media_type === "video"),
