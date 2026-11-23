@@ -17,9 +17,9 @@ import { ClientMessagesChat } from "@/components/projects/client-messages-chat";
 import { DownloadQualityDialog } from "@/components/projects/download-quality-dialog";
 import { HashScrollHandler } from "@/components/ui/hash-scroll-handler";
 import { useVisualViewport } from "@/hooks/use-visual-viewport";
-import { PortalTopBar } from "@/components/client-portal/portal-ui";
+import { PortalThumbsEndpointContext, PortalTopBar } from "@/components/client-portal/portal-ui";
 import { resolvePortalFinancialState } from "@/components/client-portal/portal-financial-state";
-import { parsePortalTab, type PortalCtx, type PortalTab } from "@/components/client-portal/portal-context";
+import { buildPortalPublicLink, parsePortalTab, type PortalCtx, type PortalTab } from "@/components/client-portal/portal-context";
 import { GalleryTab, PhotosTab } from "@/components/client-portal/portal-gallery";
 import {
   EstimatePayTab, FilesTab, MarketingTab, ModelsTab, ToursTab, VideosTab,
@@ -90,7 +90,14 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     clientFavoriteIds = null,
     marketingPaymentLinks = {},
     tourEmbedUrls,
+    publicLink: publicLinkProp = null,
   } = props;
+
+  const publicLink = useMemo(
+    () => (publicLinkProp ? buildPortalPublicLink(publicLinkProp) : null),
+    [publicLinkProp]
+  );
+  const downloadApiBase = publicLink?.downloadApiBase;
 
   // Approving a proposal updates the summary, nav and Payments at once (no reload needed).
   const { quotes, payments, upsertQuote, upsertPayment } = useLiveFinancials(serverQuotes, serverPayments);
@@ -241,8 +248,9 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     async (asset: MediaAsset, thumb = false): Promise<string | null> => {
       try {
         const preview = !downloadsUnlocked && !thumb;
-        const res = await fetch(`/api/media/download/${asset.id}${thumb ? "?thumb=1" : preview ? "?preview=1" : ""}`, {
-          credentials: "include",
+        const base = downloadApiBase ?? "/api/media/download";
+        const res = await fetch(`${base}/${asset.id}${thumb ? "?thumb=1" : preview ? "?preview=1" : ""}`, {
+          credentials: downloadApiBase ? "omit" : "include",
         });
         const text = await res.text();
         if (!text) return null;
@@ -256,7 +264,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
         return null;
       }
     },
-    [downloadsUnlocked]
+    [downloadsUnlocked, downloadApiBase]
   );
 
   const handleDownload = useCallback(
@@ -272,31 +280,36 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
       if (asset.media_type === "document") {
         const pending = toast.loading(`Downloading ${mediaDisplayName(asset)}…`);
         try {
-          await downloadMediaFileChecked(asset);
+          await downloadMediaFileChecked(asset, { apiBase: downloadApiBase });
           toast.success("Download started", { id: pending });
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "The download failed. Please try again.", { id: pending });
         }
         return;
       }
-      await downloadMediaAsset(asset);
+      await downloadMediaAsset(asset, { apiBase: downloadApiBase });
     },
-    [downloadsUnlocked, downloadLockMessage]
+    [downloadsUnlocked, downloadLockMessage, downloadApiBase]
   );
 
   const handleView = useCallback(
     async (asset: MediaAsset) => {
-      if (!downloadsUnlocked) {
+      // Link viewers have no inline file route: open the short-lived signed URL instead.
+      if (!downloadsUnlocked || downloadApiBase) {
         const url = await getDownloadUrl(asset);
         if (url) window.open(url, "_blank", "noopener,noreferrer");
         return;
       }
       viewMediaAsset(asset);
     },
-    [downloadsUnlocked, getDownloadUrl]
+    [downloadsUnlocked, getDownloadUrl, downloadApiBase]
   );
 
-  const zipAll = useProjectZipDownload({ projectId: project.id, expectedFileCount: downloadableFileCount });
+  const zipAll = useProjectZipDownload({
+    projectId: project.id,
+    zipApiBase: publicLink?.zipApiBase,
+    expectedFileCount: downloadableFileCount,
+  });
   const zipFavorites = useProjectZipDownload({
     projectId: project.id,
     favoritesOnly: true,
@@ -311,7 +324,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
   }, [videoReviews]);
   const videoEntries = useMemo(() => videosToGridEntries(videos), [videos]);
 
-  const canMessage = canViewFinancials && !isSharedViewer;
+  const canMessage = canViewFinancials && !isSharedViewer && !publicLink;
   const openMessages = canMessage ? () => setMessagesOpen(true) : null;
 
   const ctx: PortalCtx = {
@@ -366,6 +379,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
     availableTabs,
     marketingProducts,
     tourEmbedUrls,
+    publicLink,
   };
 
   // After a payment unlocks downloads, "Download media" opens the gallery, where Download All waits.
@@ -377,6 +391,7 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
   const pageTitle = project.property_address?.trim() || project.project_name;
 
   return (
+    <PortalThumbsEndpointContext.Provider value={publicLink?.thumbnailsEndpoint}>
     <PaymentOptionsProvider value={paymentOptions}>
       <ShowMediaAfterPaymentProvider value={showMediaAfterPayment}>
       <div className="min-h-screen bg-slate-50 surface-dark:bg-background">
@@ -390,7 +405,13 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
             </Link>
           </div>
         ) : null}
-        <PortalTopBar title={pageTitle} onOpenMessages={openMessages ?? undefined} showMyProjects={!isPreview} preview={isPreview}>
+        <PortalTopBar
+          title={pageTitle}
+          onOpenMessages={openMessages ?? undefined}
+          showMyProjects={!isPreview}
+          preview={isPreview}
+          signInHref={publicLink?.signInHref}
+        >
           <div ref={navRef} className="border-t border-border/70">
             <ProjectTabsNav tab={tab} ctx={ctx} />
           </div>
@@ -405,6 +426,12 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
           {tab === "marketing" && <MarketingTab ctx={ctx} />}
           {tab === "files" && <FilesTab ctx={ctx} />}
           {tab === "pay" && <EstimatePayTab ctx={ctx} />}
+          {publicLink ? (
+            <p className="mt-10 border-t border-border/60 pt-6 text-xs text-muted">
+              This page is not indexed by search engines. Link views (anonymous, not identifiable):{" "}
+              {publicLink.viewCount.toLocaleString()}. Signed media links expire in 30 minutes.
+            </p>
+          ) : null}
         </main>
 
         {/* ZIP pickers + progress, shared by every Download All / Download Favorites button. */}
@@ -458,13 +485,14 @@ export function ClientPortalProject(props: ProjectPageClientProps) {
           onClose={() => setPendingPhotoDownload(null)}
           title="Download photo"
           onConfirm={(q: DownloadQuality) => {
-            if (pendingPhotoDownload) void downloadMediaAsset(pendingPhotoDownload, { quality: q });
+            if (pendingPhotoDownload) void downloadMediaAsset(pendingPhotoDownload, { quality: q, apiBase: downloadApiBase });
             setPendingPhotoDownload(null);
           }}
         />
       </div>
       </ShowMediaAfterPaymentProvider>
     </PaymentOptionsProvider>
+    </PortalThumbsEndpointContext.Provider>
   );
 }
 

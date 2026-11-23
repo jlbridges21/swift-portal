@@ -86,6 +86,8 @@ export function VideosTab({ ctx }: { ctx: PortalCtx }) {
           canAccessVideoReviews={ctx.canAccessVideoReviews}
           canShareVideos={ctx.videoSharing?.canShare}
           publicVideoIds={ctx.videoSharing?.publicVideoIds}
+          signInHref={ctx.publicLink?.signInHref}
+          thumbnailsEndpoint={ctx.publicLink?.thumbnailsEndpoint}
         />
       </div>
     </div>

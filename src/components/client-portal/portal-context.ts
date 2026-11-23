@@ -84,4 +84,29 @@ export type PortalCtx = Required<
   tourEmbedUrls?: Record<string, string | null>;
   /** Marketing add-ons the client can see on this project. */
   marketingProducts: ("website" | "social")[];
+  /** Anonymous link viewer: token API routes + sign-in link. Null for signed-in viewers. */
+  publicLink: PortalPublicLink | null;
 };
+
+export type PortalPublicLink = {
+  token: string;
+  viewCount: number;
+  /** `/api/public/link/{token}/media/download` (append `/{assetId}`). */
+  downloadApiBase: string;
+  thumbnailsEndpoint: string;
+  zipApiBase: string;
+  /** Sign in and come back to this link (video comments need an account). */
+  signInHref: string;
+};
+
+export function buildPortalPublicLink(link: { token: string; viewCount: number }): PortalPublicLink {
+  const apiBase = `/api/public/link/${encodeURIComponent(link.token)}`;
+  return {
+    token: link.token,
+    viewCount: link.viewCount,
+    downloadApiBase: `${apiBase}/media/download`,
+    thumbnailsEndpoint: `${apiBase}/media/thumbnails`,
+    zipApiBase: `${apiBase}/projects/download-zip`,
+    signInHref: `/login?redirect=${encodeURIComponent(`/view/${link.token}?tab=videos`)}`,
+  };
+}
