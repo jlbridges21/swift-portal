@@ -21,6 +21,7 @@ import {
   rankStaffForStart,
   slotsForStaff,
   sortSlots,
+  travelFitsAWorkingDay,
   type BusyInterval,
   type EngineAppointment,
   type EngineInput,
@@ -449,7 +450,7 @@ export type AvailabilityResult = {
   durationMinutes: number;
   serviceArea: ServiceAreaDecision;
   /** Why no instant booking is possible for this project (null = bookable). */
-  blockedReason: "services_not_instant" | "outside_service_area" | "no_address" | "not_ready" | null;
+  blockedReason: "services_not_instant" | "outside_service_area" | "no_address" | "not_ready" | "too_far" | null;
   slots: { start: string; end: string; userId: string; cost: number; dayKey: string }[];
   daysWithSlots: string[];
   staff: StaffAvailabilitySummary[];
@@ -600,6 +601,8 @@ export async function computeAvailability(ctx: BookingContext, req: Availability
   const publicStaff = prepared.engineStaff.filter((s) => !s.calendarUnavailable);
   const perStaff = publicStaff.map((s) => slotsForStaff(prepared.engineInput, s, dayKeys));
   const merged = mergeSlotsAcrossStaff(perStaff);
+  // People who can't reach this property within any working day (e.g. hundreds of miles away).
+  const tooFar = new Set(publicStaff.filter((s) => !travelFitsAWorkingDay(prepared.engineInput, s)).map((s) => s.userId));
 
   const summaries: StaffAvailabilitySummary[] = [];
   const memberById = new Map(ctx.team.map((m) => [m.userId, resolveMember(m, ctx.settings)]));
@@ -613,7 +616,13 @@ export async function computeAvailability(ctx: BookingContext, req: Availability
       avatarUrl: member?.avatarUrl ?? null,
       shortBio: member?.profile.shortBio ?? "",
       available: count > 0,
-      reason: s.calendarUnavailable ? "Calendar unavailable" : count ? null : "No openings in these dates",
+      reason: s.calendarUnavailable
+        ? "Calendar unavailable"
+        : count
+          ? null
+          : tooFar.has(s.userId)
+            ? "Too far to reach within working hours"
+            : "No openings in these dates",
       slotCount: count,
     });
   });
@@ -656,7 +665,8 @@ export async function computeAvailability(ctx: BookingContext, req: Availability
     timeZone: ctx.timeZone,
     durationMinutes: facts.durationMinutes,
     serviceArea,
-    blockedReason: null,
+    // Nobody can ever reach it: say so instead of an empty calendar that suggests "try next month".
+    blockedReason: !merged.length && publicStaff.length > 0 && tooFar.size === publicStaff.length ? "too_far" : null,
     slots,
     daysWithSlots: [...byDay.keys()].sort(),
     staff: summaries,

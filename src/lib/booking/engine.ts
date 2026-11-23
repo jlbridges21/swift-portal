@@ -234,6 +234,41 @@ export function evaluateStart(input: EngineInput, staff: EngineStaff, startMs: n
   };
 }
 
+/**
+ * False when the drive from this person's base to the property can never fit in any of
+ * their working days (for example a property hundreds of miles away with "drive within
+ * working hours"). Only judged on a known drive time, so a failed lookup never hides times.
+ */
+export function travelFitsAWorkingDay(input: EngineInput, staff: EngineStaff): boolean {
+  const { rules } = input;
+  if (!staff.baseAddress || !input.propertyAddress) return true;
+  if (staff.baseAddress.trim().toLowerCase() === input.propertyAddress.trim().toLowerCase()) return true;
+  const longestDay = Math.max(
+    0,
+    ...staff.workingHours.filter((h) => h?.enabled).map((h) => wallTimeToMinutes(h.end) - wallTimeToMinutes(h.start))
+  );
+  // No working days, or a shoot longer than the day, is a different problem; don't call it distance.
+  if (!longestDay || input.durationMinutes > longestDay) return true;
+  // Mirrors evaluateStart's day rules, in minutes from opening time.
+  let earliestStart = 0;
+  let distanceMatters = false;
+  if (rules.startOfDayRule === "travel_within_hours") {
+    const inbound = input.travelMinutes(staff.baseAddress, input.propertyAddress);
+    if (inbound == null) return true;
+    earliestStart = inbound + rules.travelSafetyMarginMinutes + input.bufferBeforeMinutes;
+    distanceMatters = true;
+  }
+  const end = earliestStart + input.durationMinutes;
+  let fits = rules.endOfDayRule === "finish_by_close" ? end <= longestDay : earliestStart < longestDay;
+  if (!rules.allowReturnTravelOutsideHours) {
+    const outbound = input.travelMinutes(input.propertyAddress, staff.baseAddress);
+    if (outbound == null) return true;
+    fits = fits && end + input.bufferAfterMinutes + outbound <= longestDay;
+    distanceMatters = true;
+  }
+  return !distanceMatters || fits;
+}
+
 /** Cost of giving this slot to this person. Lower is better; 0–1. */
 export function slotCost(staff: EngineStaff, evaluation: SlotEvaluation): number {
   const w = staff.weights;
