@@ -827,8 +827,8 @@ async function main() {
     check(signAnon.status === 401 || signAnon.status === 403, "upload sign without a session → denied", show(signAnon));
     const viewerSrc = readFileSync(resolve("src/components/photos/photo-share-viewer.tsx"), "utf8");
     check(!viewerSrc.includes("/api/media/thumbnails") && !viewerSrc.includes("media-thumb-client"), "photo share viewer never calls the authenticated thumbnail API");
-    const publicClient = readFileSync(resolve("src/components/projects/public-project-page-client.tsx"), "utf8");
-    check(publicClient.includes("/api/public/link/"), "public project page uses the public-link thumbnail endpoint");
+    const publicLinkSrc = readFileSync(resolve("src/components/client-portal/portal-context.ts"), "utf8");
+    check(publicLinkSrc.includes("/api/public/link/") && publicLinkSrc.includes("/media/thumbnails"), "public project page uses the public-link thumbnail endpoint");
     const routeSrc = [
       "src/app/api/media/[id]/shares/route.ts",
       "src/app/api/media-folders/[id]/shares/route.ts",

@@ -106,6 +106,11 @@ export interface ProjectPageClientProps {
   marketingPaymentLinks?: Record<string, MarketingProduct[]>;
   /** tour id → iframe URL from resolveTourEmbedUrl (null = provider blocks embedding). */
   tourEmbedUrls?: Record<string, string | null>;
+  /**
+   * Anonymous "Anyone with the link" viewer (/view/{token}), new client portal only. Media,
+   * thumbnails and ZIPs go through the token routes; no session-backed features are shown.
+   */
+  publicLink?: { token: string; viewCount: number } | null;
 }
 
 const REVISION_STATUS_LABEL: Record<string, string> = {

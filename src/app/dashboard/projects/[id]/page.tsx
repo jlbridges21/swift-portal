@@ -236,7 +236,9 @@ async function ProjectContent({
   // New Experience portal: clients follow the business owner's interface; a business user
   // previewing the client view sees the portal for the interface they use themselves.
   const portalInterface = await getClientPortalInterfaceFor(profile, tenant.businessId);
-  const useNewPortal = portalInterface === "new" && !(isAdminViewer && !preview);
+  // Shared viewers (email / per-person shares) always get the new portal, like link viewers
+  // on /view/{token}: the classic shared-project layout is retired.
+  const useNewPortal = isSharedViewer || (portalInterface === "new" && !(isAdminViewer && !preview));
   const PortalPage = useNewPortal ? ClientPortalProject : ProjectPageClient;
   // Which open charges are optional Marketing Kit add-ons (presentation only).
   const marketingPaymentLinks =

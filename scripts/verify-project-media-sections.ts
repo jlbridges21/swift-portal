@@ -571,11 +571,9 @@ async function main() {
 
   section("9. Everything-off empty state present");
   assert(pageClient.includes("No media available"), "client empty state when no sections");
-  const publicClient = readFileSync(
-    resolve("src/components/projects/public-project-page-client.tsx"),
-    "utf8"
-  );
-  assert(publicClient.includes("No media available"), "public empty state when no sections");
+  // Link viewers (/view/{token}) use the client portal, which has its own empty state.
+  const portalGallery = readFileSync(resolve("src/components/client-portal/portal-gallery.tsx"), "utf8");
+  assert(portalGallery.includes("No media yet"), "portal empty state when no sections (clients + link viewers)");
 
   section("10. Phase 2 + phase 3 boundary sweeps");
   execSync("npx tsx scripts/verify-share-access-tokens.ts", {

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
@@ -6,16 +7,13 @@ import { getAppSettings } from "@/lib/app-settings";
 import { getPortalBrandFromSettings } from "@/lib/portal-brand";
 import { getPublicHostContext, isActivePublicTenant } from "@/lib/host-resolution";
 import { loadPublicProjectView } from "@/lib/load-public-project-view";
-import {
-  allowPublicLinkPageView,
-  PUBLIC_LINK_RATE_LIMITS,
-} from "@/lib/public-link-rate-limit";
+import { allowPublicLinkPageView } from "@/lib/public-link-rate-limit";
 import {
   incrementPublicLinkViewCount,
   resolvePublicLinkProject,
 } from "@/lib/project-link-access";
 import { resolveProjectAccess } from "@/lib/project-access";
-import { PublicProjectPageClient } from "@/components/projects/public-project-page-client";
+import { ClientPortalProject } from "@/components/client-portal/client-portal-project";
 import { BrandProvider } from "@/components/brand/brand-provider";
 import { parseSurfaceMode, surfaceChrome } from "@/lib/brand-color";
 
@@ -79,24 +77,44 @@ export default async function PublicProjectViewPage({ params }: PageProps) {
   const settings = await getAppSettings(data.ctx.businessId);
   const brand = getPortalBrandFromSettings(settings);
 
+  // Same tabbed portal clients get, scoped like an email-share viewer and then narrower:
+  // media only (view/download), no financials, progress, messages, revisions or favorites.
+  // Video comments need an account, so the top bar offers "Sign in to comment".
   return (
     <BrandProvider brand={brand} surfaceMode={parseSurfaceMode(settings.business.surfaceMode)}>
-      <PublicProjectPageClient
-        token={token}
-        project={data.ctx.project}
-        hero={data.hero}
-        photos={data.photos}
-        videos={data.videos}
-        documents={data.documents}
-        tours={data.tours}
-        models={data.models}
-        mediaFolders={data.mediaFolders}
-        videoReviews={data.videoReviews}
-        mediaSections={data.mediaSections}
-        requireDeliveredForDownloads={data.requireDeliveredForDownloads}
-        viewCount={(data.ctx.project.link_access_view_count ?? 0) + 1}
-        rateLimitPagePerMinute={PUBLIC_LINK_RATE_LIMITS.pagePerMinute}
-      />
+      <Suspense>
+        <ClientPortalProject
+          project={data.project}
+          hero={data.hero}
+          photos={data.photos}
+          videos={data.videos}
+          documents={data.documents}
+          tours={data.tours}
+          models={data.models}
+          mediaFolders={data.mediaFolders}
+          videoReviews={data.videoReviews}
+          mediaSections={data.mediaSections}
+          requireDeliveredForDownloads={data.requireDeliveredForDownloads}
+          tourEmbedUrls={data.tourEmbedUrls}
+          payments={[]}
+          revisions={[]}
+          shootProposals={[]}
+          activities={[]}
+          quotes={[]}
+          assetReviews={[]}
+          isSharedViewer
+          canViewFinancials={false}
+          canViewProjectProgress={false}
+          canAccessVideoReviews={false}
+          allowClientProposalChanges={false}
+          clientFavoriteIds={null}
+          marketingKit={null}
+          publicLink={{
+            token,
+            viewCount: (data.ctx.project.link_access_view_count ?? 0) + 1,
+          }}
+        />
+      </Suspense>
     </BrandProvider>
   );
 }

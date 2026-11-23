@@ -119,6 +119,8 @@ function GalleryHome({ ctx }: { ctx: PortalCtx }) {
                   photos={sortedPhotos}
                   getDownloadUrl={ctx.getDownloadUrl}
                   downloadsAllowed={ctx.downloadsUnlocked}
+                  downloadApiBase={ctx.publicLink?.downloadApiBase}
+                  thumbnailsEndpoint={ctx.publicLink?.thumbnailsEndpoint}
                   favorites={ctx.favorites}
                   onMore={() => ctx.goTo("photos", { album: "all" })}
                 />
@@ -156,6 +158,8 @@ function GalleryHome({ ctx }: { ctx: PortalCtx }) {
                 canAccessVideoReviews={ctx.canAccessVideoReviews}
                 canShareVideos={ctx.videoSharing?.canShare}
                 publicVideoIds={ctx.videoSharing?.publicVideoIds}
+                signInHref={ctx.publicLink?.signInHref}
+                thumbnailsEndpoint={ctx.publicLink?.thumbnailsEndpoint}
               />
             </PortalCard>
           ) : null}
@@ -848,6 +852,8 @@ function MarketingSideCard({ ctx }: { ctx: PortalCtx }) {
 function ContactCard({ ctx }: { ctx: PortalCtx }) {
   const brand = usePortalBrand();
   const phone = brand.phoneNumber?.trim();
+  // Anonymous link viewers get media only: no messaging or contact surface.
+  if (ctx.publicLink) return null;
   if (!ctx.openMessages && !phone) return null;
   return (
     <PortalCard title="Contact" icon={MessageSquare} subtitle={`Have a question for ${brand.name}?`}>
@@ -986,6 +992,7 @@ function FullGallery({ ctx, album }: { ctx: PortalCtx; album: string }) {
             {view === "folder" && ctx.downloadsUnlocked && folderDownloadCount > 0 ? (
               <ProjectZipDownload
                 projectId={ctx.project.id}
+                zipApiBase={ctx.publicLink?.zipApiBase}
                 folderId={folderScope!}
                 folderLabel={folderName}
                 expectedFileCount={folderDownloadCount}
@@ -1093,6 +1100,8 @@ function FullGallery({ ctx, album }: { ctx: PortalCtx; album: string }) {
             photos={list}
             getDownloadUrl={ctx.getDownloadUrl}
             downloadsAllowed={ctx.downloadsUnlocked}
+            downloadApiBase={ctx.publicLink?.downloadApiBase}
+            thumbnailsEndpoint={ctx.publicLink?.thumbnailsEndpoint}
             favorites={ctx.favorites}
             gridClassName="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4"
             emptyState={

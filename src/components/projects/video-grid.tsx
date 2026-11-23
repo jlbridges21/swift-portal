@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Clapperboard, Download, Globe, Loader2, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { SafeAreaCloseButton } from "@/components/ui/safe-area-close-button";
 import { VideoCard, VIDEO_GRID_CLASS, VIDEO_GRID_COLUMNS } from "@/components/ui/video-card";
 import { VideoPosterSurface } from "@/components/ui/video-poster-surface";
@@ -304,12 +304,11 @@ function VideoReviewCardEntry({
   const label = isSignIn ? "Sign in to comment" : reviewItem ? "Open review" : "Add comment";
   return (
     <div className="mt-2">
-      <Button variant="outline" size="sm" className="min-h-10 w-full sm:w-auto" asChild>
-        <Link href={reviewHref}>
-          <Clapperboard className="mr-1.5 h-4 w-4" />
-          {label}
-        </Link>
-      </Button>
+      {/* Button has no asChild (it rendered a <button> around the link): style the link itself. */}
+      <Link href={reviewHref} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "min-h-10 w-full sm:w-auto")}>
+        <Clapperboard className="mr-1.5 h-4 w-4" />
+        {label}
+      </Link>
     </div>
   );
 }
@@ -504,16 +503,14 @@ function VideoPlayerLightbox({
 
           <div className="mt-4 flex w-full max-w-5xl flex-wrap items-center gap-2">
             {reviewHref ? (
-              <Button variant="accent" size="sm" className="min-h-10" asChild>
-                <Link href={reviewHref}>
-                  <Clapperboard className="mr-1.5 h-4 w-4" />
-                  {reviewHref.startsWith("/login")
-                    ? "Sign in to comment"
-                    : reviewItem
-                      ? "Open review"
-                      : "Add comment"}
-                </Link>
-              </Button>
+              <Link href={reviewHref} className={cn(buttonVariants({ variant: "accent", size: "sm" }), "min-h-10")}>
+                <Clapperboard className="mr-1.5 h-4 w-4" />
+                {reviewHref.startsWith("/login")
+                  ? "Sign in to comment"
+                  : reviewItem
+                    ? "Open review"
+                    : "Add comment"}
+              </Link>
             ) : isAdmin && entry.kind === "uploaded" && !reviewItem ? (
               <Button
                 type="button"
