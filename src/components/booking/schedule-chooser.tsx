@@ -439,6 +439,14 @@ export function ScheduleChooser({
                 <p className="flex items-center gap-2 text-sm text-muted">
                   <Loader2 className="h-4 w-4 animate-spin" /> Finding open times…
                 </p>
+              ) : data?.blockedReason === "too_far" ? (
+                <div className="flex items-start gap-2 text-sm text-muted">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+                  <p>
+                    This property is too far away to book online, so there are no times to pick here. Send your request without a
+                    time and we&apos;ll follow up to schedule it.
+                  </p>
+                </div>
               ) : data?.blockedReason ? (
                 <p className="text-sm text-muted">Online booking isn&apos;t available for this request — we&apos;ll reach out with times.</p>
               ) : !day || !daySlots.length ? (
@@ -486,7 +494,7 @@ export function ScheduleChooser({
 
         {error ? <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
 
-        {probeEmpty && view.mode === "required" ? (
+        {probeEmpty && view.mode === "required" && !data?.blockedReason ? (
           <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
             There are no open appointments in the next few weeks. Send your request without a time and {view.businessName} will
             reach out to schedule.
