@@ -3,7 +3,7 @@
 import { compactServiceLabel, projectServiceNames } from "@/lib/project-service-names";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, FolderOpen, MoreHorizontal, User } from "lucide-react";
+import { ChevronLeft, ExternalLink, FolderOpen, MoreHorizontal, Shuffle, User, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ActionMenu, type ActionMenuAnchor, type ActionMenuItem } from "@/components/ui/action-menu";
 import { getStatusLabel, normalizeStatus, type ProjectStatus } from "@/lib/constants";
@@ -100,64 +100,114 @@ export function useProjectStageMove(projects: ClientViewProjectRow[]) {
   return { moveProject, projects: current };
 }
 
-/** "···" actions on a Client View project: open, move stage, client profile. */
+/** Extra per-project actions the Projects workspace adds to the "···" menu. */
+export type ProjectMenuActions = {
+  /** Shows "Assign staff" → staff picker (adds the person; existing assignments are kept). */
+  assignStaff?: {
+    options: { id: string; email: string; full_name: string | null }[];
+    onAssign: (member: { id: string; email: string; full_name: string | null }) => void;
+  };
+  /** After Change stage / Assign staff (e.g. Hide, Restore). */
+  items?: ActionMenuItem[];
+  /** Last group, after a separator (e.g. Delete). */
+  dangerItems?: ActionMenuItem[];
+  disabled?: boolean;
+};
+
+/**
+ * "···" actions on a project: open, Change stage (→ stage list), Assign staff (→ staff list),
+ * Hide / Delete when provided, client profile. Stages live one click deeper on purpose.
+ */
 export function ProjectActionsButton({
   project,
   onMove,
   canOpenClients,
   className,
-  extraItems,
+  actions,
 }: {
   project: ClientViewProjectRow;
   onMove: (project: ClientViewProjectRow, next: ProjectStatus) => void;
   canOpenClients: boolean;
   className?: string;
-  /** Appended after a separator (e.g. Hide / Restore in the Projects List). */
-  extraItems?: ActionMenuItem[];
+  actions?: ProjectMenuActions;
 }) {
   const router = useRouter();
   const openClientProfile = useOpenClientProfile();
   const [anchor, setAnchor] = useState<ActionMenuAnchor | null>(null);
+  const [view, setView] = useState<"main" | "stage" | "staff">("main");
 
-  const items: ActionMenuItem[] = [
-    {
-      id: "open",
-      label: "Open project",
-      icon: FolderOpen,
-      onSelect: () => router.push(`/admin/projects/${project.id}`),
-    },
-    {
-      id: "open-tab",
-      label: "Open in new tab",
-      icon: ExternalLink,
-      onSelect: () => window.open(`/admin/projects/${project.id}`, "_blank", "noopener"),
-    },
-    { type: "separator", id: "sep-stage" },
-    { type: "label", id: "move-label", label: "Move to stage" },
-    ...CLIENT_VIEW_STAGES.map((s) => ({
-      id: `move-${s.value}`,
-      label: s.label,
-      disabled: s.value === project.status,
-      hint: s.value === project.status ? "Current" : undefined,
-      onSelect: () => onMove(project, s.value),
-    })),
-  ];
-  if (canOpenClients && project.client_id) {
-    items.push(
-      { type: "separator", id: "sep-client" },
+  // ActionMenu closes before running an item, so re-open at the same trigger to show a sub-list.
+  const openView = (next: "main" | "stage" | "staff") => {
+    if (!anchor) return;
+    const element = anchor.element;
+    setView(next);
+    setAnchor({ kind: "element", element });
+  };
+  const back: ActionMenuItem = { id: "back", label: "Back", icon: ChevronLeft, onSelect: () => openView("main") };
+
+  let items: ActionMenuItem[];
+  let title = project.project_name;
+  if (view === "stage") {
+    title = "Change stage";
+    items = [
+      back,
+      { type: "separator", id: "sep-back" },
+      { type: "label", id: "move-label", label: "Move to stage" },
+      ...CLIENT_VIEW_STAGES.map((s) => ({
+        id: `move-${s.value}`,
+        label: s.label,
+        disabled: s.value === project.status,
+        hint: s.value === project.status ? "Current" : undefined,
+        onSelect: () => onMove(project, s.value),
+      })),
+    ];
+  } else if (view === "staff" && actions?.assignStaff) {
+    const { options, onAssign } = actions.assignStaff;
+    title = "Assign staff";
+    items = [
+      back,
+      { type: "separator", id: "sep-back" },
+      { type: "label", id: "staff-label", label: "Assign staff" },
+      ...options.map((m) => ({ id: `staff-${m.id}`, label: m.full_name || m.email, onSelect: () => onAssign(m) })),
+    ];
+  } else {
+    items = [
       {
-        id: "client",
-        label: "View client profile",
-        icon: User,
-        onSelect: () => {
-          const clientId = project.client_id!;
-          if (openClientProfile) openClientProfile(clientId);
-          else router.push(`/admin/clients/${clientId}`);
-        },
-      }
-    );
+        id: "open",
+        label: "Open project",
+        icon: FolderOpen,
+        onSelect: () => router.push(`/admin/projects/${project.id}`),
+      },
+      {
+        id: "open-tab",
+        label: "Open in new tab",
+        icon: ExternalLink,
+        onSelect: () => window.open(`/admin/projects/${project.id}`, "_blank", "noopener"),
+      },
+      { type: "separator", id: "sep-stage" },
+      { id: "change-stage", label: "Change stage", icon: Shuffle, disabled: actions?.disabled, onSelect: () => openView("stage") },
+    ];
+    if (actions?.assignStaff?.options.length) {
+      items.push({ id: "assign-staff", label: "Assign staff", icon: UserPlus, disabled: actions.disabled, onSelect: () => openView("staff") });
+    }
+    if (actions?.items?.length) items.push(...actions.items);
+    if (canOpenClients && project.client_id) {
+      items.push(
+        { type: "separator", id: "sep-client" },
+        {
+          id: "client",
+          label: "View client profile",
+          icon: User,
+          onSelect: () => {
+            const clientId = project.client_id!;
+            if (openClientProfile) openClientProfile(clientId);
+            else router.push(`/admin/clients/${clientId}`);
+          },
+        }
+      );
+    }
+    if (actions?.dangerItems?.length) items.push({ type: "separator", id: "sep-danger" }, ...actions.dangerItems);
   }
-  if (extraItems?.length) items.push({ type: "separator", id: "sep-extra" }, ...extraItems);
 
   return (
     <>
@@ -168,6 +218,7 @@ export function ProjectActionsButton({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          setView("main");
           setAnchor({ kind: "element", element: e.currentTarget });
         }}
         className={cn(
@@ -177,7 +228,7 @@ export function ProjectActionsButton({
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
-      <ActionMenu anchor={anchor} onClose={() => setAnchor(null)} items={items} title={project.project_name} />
+      <ActionMenu anchor={anchor} onClose={() => setAnchor(null)} items={items} title={title} />
     </>
   );
 }

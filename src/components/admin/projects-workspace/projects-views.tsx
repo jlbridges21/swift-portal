@@ -10,6 +10,7 @@ import { ProjectStorageLabel } from "@/components/admin/project-card-extras";
 import {
   formatCardDate,
   ProjectActionsButton,
+  type ProjectMenuActions,
   ServicePill,
   StagePill,
   type ClientViewProjectRow,
@@ -19,10 +20,10 @@ import type { ProjectStatus } from "@/lib/constants";
 import type { ProjectStorageMap } from "@/lib/project-storage";
 import { projectPaymentStatus, type ProjectsSort } from "@/lib/projects-workspace";
 import { cn } from "@/lib/utils";
-import type { ActionMenuItem } from "@/components/ui/action-menu";
 import { SelectCheckbox } from "@/components/admin/projects-workspace/projects-bulk";
 
 type Move = (project: ClientViewProjectRow, next: ProjectStatus) => void;
+type MenuActions = (project: ClientViewProjectRow) => ProjectMenuActions | undefined;
 
 /** Resolve the streamed hero-poster map (undefined while loading). */
 export function useHeroUrls(promise?: Promise<Record<string, string | null>>) {
@@ -83,12 +84,14 @@ function PipelineCard({
   storageBytes,
   canOpenClients,
   onMove,
+  menuActions,
 }: {
   project: ClientViewProjectRow;
   heroUrl: string | null | undefined;
   storageBytes?: Promise<ProjectStorageMap | null>;
   canOpenClients: boolean;
   onMove: Move;
+  menuActions?: MenuActions;
 }) {
   const date = formatCardDate(project);
   return (
@@ -122,7 +125,7 @@ function PipelineCard({
           </div>
         </div>
       </ProjectLink>
-      <ProjectActionsButton project={project} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-1.5 right-1.5" />
+      <ProjectActionsButton project={project} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(project)} className="absolute bottom-1.5 right-1.5" />
     </article>
   );
 }
@@ -139,6 +142,7 @@ export function ProjectsBoard({
   canCreateProject,
   onMove,
   scrollToStatus,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
@@ -147,6 +151,7 @@ export function ProjectsBoard({
   canCreateProject: boolean;
   onMove: Move;
   scrollToStatus?: ProjectStatus;
+  menuActions?: MenuActions;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
@@ -218,6 +223,7 @@ export function ProjectsBoard({
                       storageBytes={storageBytes}
                       canOpenClients={canOpenClients}
                       onMove={onMove}
+                      menuActions={menuActions}
                     />
                   </div>
                 ))}
@@ -275,7 +281,7 @@ export function ProjectsList({
   canOpenClients,
   onMove,
   selection,
-  rowActions,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
@@ -290,7 +296,7 @@ export function ProjectsList({
     toggleAll: () => void;
   };
   /** Extra ··· items per row (Hide / Restore). */
-  rowActions?: (p: ClientViewProjectRow) => ActionMenuItem[];
+  menuActions?: MenuActions;
 }) {
   const router = useRouter();
   const selectedShown = selection ? projects.filter((p) => selection.selected.has(p.id)).length : 0;
@@ -369,7 +375,7 @@ export function ProjectsList({
                 </td>
                 <td className="hidden truncate px-3 py-2.5 text-xs text-muted xl:table-cell">{updated.format(new Date(p.updated_at))}</td>
                 <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} extraItems={rowActions?.(p)} />
+                  <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(p)} />
                 </td>
               </tr>
             );
@@ -388,12 +394,14 @@ export function ProjectsGrid({
   storageBytes,
   canOpenClients,
   onMove,
+  menuActions,
 }: {
   projects: ClientViewProjectRow[];
   heroUrls: Record<string, string | null> | null | undefined;
   storageBytes?: Promise<ProjectStorageMap | null>;
   canOpenClients: boolean;
   onMove: Move;
+  menuActions?: MenuActions;
 }) {
   return (
     <ul className="grid min-w-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -436,7 +444,7 @@ export function ProjectsGrid({
                   <ProjectStorageLabel projectId={p.id} storage={storageBytes} className="block text-[11px]" />
                 </div>
               </ProjectLink>
-              <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} className="absolute bottom-2 right-2" />
+              <ProjectActionsButton project={p} onMove={onMove} canOpenClients={canOpenClients} actions={menuActions?.(p)} className="absolute bottom-2 right-2" />
             </article>
           </li>
         );
