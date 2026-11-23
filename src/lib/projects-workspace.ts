@@ -6,6 +6,7 @@ import { projectMatchesServices } from "@/lib/project-service-names";
 import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/constants";
 import type { PipelineProjectRow } from "@/lib/admin-project-pipeline";
 import { projectShootAt } from "@/lib/client-view";
+import type { ProjectStorageMap } from "@/lib/project-storage";
 
 // ── Views ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,16 @@ export function projectPaymentStatus(p: Pick<PipelineProjectRow, "pendingPayment
 
 // ── Sorting ─────────────────────────────────────────────────────────────────
 
-export type ProjectsSort = "updated" | "created_desc" | "created_asc" | "shoot_asc" | "shoot_desc" | "name_asc" | "name_desc";
+export type ProjectsSort =
+  | "updated"
+  | "created_desc"
+  | "created_asc"
+  | "shoot_asc"
+  | "shoot_desc"
+  | "name_asc"
+  | "name_desc"
+  | "size_desc"
+  | "size_asc";
 
 export const PROJECTS_SORT_OPTIONS: { value: ProjectsSort; label: string }[] = [
   { value: "updated", label: "Recently Updated" },
@@ -58,14 +68,20 @@ export const PROJECTS_SORT_OPTIONS: { value: ProjectsSort; label: string }[] = [
   { value: "shoot_desc", label: "Shoot Date: Latest" },
   { value: "name_asc", label: "Project Name: A–Z" },
   { value: "name_desc", label: "Project Name: Z–A" },
+  { value: "size_desc", label: "Project Size: Largest" },
+  { value: "size_asc", label: "Project Size: Smallest" },
 ];
 
 export function isProjectsSort(v: unknown): v is ProjectsSort {
   return PROJECTS_SORT_OPTIONS.some((o) => o.value === v);
 }
 
-/** Stable sort; projects without a shoot date always sink to the end for shoot-date sorts. */
-export function sortProjects<T extends PipelineProjectRow>(projects: T[], sort: ProjectsSort): T[] {
+/**
+ * Stable sort; projects without a shoot date always sink to the end for shoot-date sorts.
+ * Size sorts use the streamed storage map (project id → bytes; absent = 0). Until it
+ * resolves (or if it failed), they fall back to Recently Updated.
+ */
+export function sortProjects<T extends PipelineProjectRow>(projects: T[], sort: ProjectsSort, storage?: ProjectStorageMap | null): T[] {
   const list = [...projects];
   const byUpdated = (a: T, b: T) => b.updated_at.localeCompare(a.updated_at);
   const byName = (a: T, b: T) => a.project_name.localeCompare(b.project_name, undefined, { sensitivity: "base", numeric: true });
@@ -88,6 +104,15 @@ export function sortProjects<T extends PipelineProjectRow>(projects: T[], sort: 
       return list.sort(byName);
     case "name_desc":
       return list.sort((a, b) => byName(b, a));
+    case "size_desc":
+    case "size_asc": {
+      if (!storage) return list.sort(byUpdated);
+      const bytes = (p: T) => storage[p.id] ?? 0;
+      return list.sort((a, b) => {
+        const diff = sort === "size_desc" ? bytes(b) - bytes(a) : bytes(a) - bytes(b);
+        return diff || byUpdated(a, b);
+      });
+    }
     default:
       return list.sort(byUpdated);
   }

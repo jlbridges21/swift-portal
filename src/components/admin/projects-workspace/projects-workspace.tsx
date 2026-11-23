@@ -47,7 +47,7 @@ import {
   type ActiveChip,
   type FilterPanelState,
 } from "@/components/admin/projects-workspace/projects-toolbar";
-import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls } from "@/components/admin/projects-workspace/projects-views";
+import { ProjectsBoard, ProjectsGrid, ProjectsList, useHeroUrls, useStreamedValue } from "@/components/admin/projects-workspace/projects-views";
 import { ProjectsCalendar, type ProjectsCalendarPermissions } from "@/components/admin/projects-workspace/projects-calendar";
 import { useProjectBulkActions, type ProjectBulkPermissions } from "@/components/admin/projects-workspace/projects-bulk";
 
@@ -196,7 +196,8 @@ export function ProjectsWorkspace({
     }),
     [panel]
   );
-  const shown = useMemo(() => sortProjects(filterProjects(moved, filters, search), sort), [moved, filters, search, sort]);
+  const storage = useStreamedValue(storageBytes);
+  const shown = useMemo(() => sortProjects(filterProjects(moved, filters, search), sort, storage), [moved, filters, search, sort, storage]);
   const serviceOptions = useMemo(
     () => [...new Set(projects.flatMap((p) => projectServiceNames(p)).filter(Boolean))].sort(),
     [projects]
@@ -401,6 +402,7 @@ export function ProjectsWorkspace({
             <ProjectsList
               projects={shown}
               heroUrls={hero}
+              storage={storage}
               sort={sort}
               onSort={changeSort}
               canOpenClients={canOpenClients}
