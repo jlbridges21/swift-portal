@@ -46,6 +46,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useIsStandalonePwaMobile } from "@/lib/use-is-standalone-pwa-mobile";
 import { mediaDisplayName } from "@/lib/media-display-name";
+import { selectOrOpenClick } from "@/lib/select-or-open-click";
 import {
   createThumbRequestQueue,
   fetchThumbUrls,
@@ -940,7 +941,7 @@ function AssetCard({
       <button
         type="button"
         className="block w-full text-left"
-        onClick={() => (selectMode ? onSelect() : onOpen())}
+        onClick={(e) => selectOrOpenClick(e, selectMode, onSelect, onOpen)}
       >
         <div className="relative aspect-[4/3] bg-slate-100 surface-dark:bg-subtle">
           {isVideoLibraryAsset(asset) ? (
