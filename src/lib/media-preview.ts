@@ -37,6 +37,29 @@ export function isVideoUrl(url: string | null | undefined): boolean {
   }
 }
 
+/** Stored grid thumbnails written by buildThumbnailStoragePath: `<name>-thumb.webp|jpg`. */
+const STORED_THUMB_PATH = /-thumb\.(webp|jpe?g)$/i;
+
+/**
+ * True for Supabase Storage URLs that are already small, web-ready images: stored
+ * thumbnails (photo 400px WebP, video poster ≤640px JPEG) and Supabase on-the-fly
+ * transforms (`/render/image/`). Re-optimizing them through next/image saves almost
+ * nothing, and because signed URLs carry a fresh token on every sign, each view is an
+ * optimizer cache miss billed as a new transformation. Full-size originals return false
+ * and keep going through next/image (that's where it shrinks multi-MB photos).
+ */
+export function isPresizedStorageImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const pathname = new URL(url).pathname;
+    if (!pathname.startsWith("/storage/v1/")) return false;
+    if (pathname.startsWith("/storage/v1/render/image/")) return true;
+    return STORED_THUMB_PATH.test(decodeURIComponent(pathname));
+  } catch {
+    return false;
+  }
+}
+
 /** True when a URL is safe for next/image optimization. */
 export function isOptimizableImageUrl(url: string | null | undefined): boolean {
   if (!url || isVideoUrl(url)) return false;
