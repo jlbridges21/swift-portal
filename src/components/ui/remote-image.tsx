@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { isOptimizableImageUrl } from "@/lib/media-preview";
+import { isOptimizableImageUrl, isPresizedStorageImageUrl } from "@/lib/media-preview";
 
 /** Hostnames allowed for next/image optimization */
 const OPTIMIZED_HOSTS = [
@@ -57,6 +57,9 @@ export function RemoteImage({ src, alt, fill, className, sizes, priority }: Remo
         className={className}
         sizes={sizes}
         priority={priority}
+        // Stored thumbnails / Supabase transforms are already small; serve them straight from
+        // Storage instead of paying a (never-cached, signed-token) transformation per view.
+        unoptimized={isPresizedStorageImageUrl(src)}
         onError={() => setFailed(true)}
       />
     );
