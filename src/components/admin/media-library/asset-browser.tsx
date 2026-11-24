@@ -73,6 +73,7 @@ import {
 } from "@/components/admin/media-library/library-ui";
 import { AddToFolderDialog, FolderNameDialog } from "@/components/admin/media-library/folder-dialogs";
 import { useMarqueeSelect } from "@/components/admin/media-library/use-marquee-select";
+import { selectOrOpenClick } from "@/lib/select-or-open-click";
 import {
   changeFolderItems,
   createLibraryFolderRequest,
@@ -1403,7 +1404,7 @@ function MediaCard({ asset, thumbUrl, onVisible, selectMode, selected, onToggle,
     >
       <button
         type="button"
-        onClick={() => (selectMode ? onToggle() : onOpen())}
+        onClick={(e) => selectOrOpenClick(e, selectMode, onToggle, onOpen)}
         className="relative block aspect-[16/10] w-full overflow-hidden bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         aria-label={selectMode ? `${selected ? "Deselect" : "Select"} ${asset.title}` : `Preview ${asset.title}`}
       >
@@ -1464,7 +1465,7 @@ function MediaRow({ asset, thumbUrl, onVisible, selectMode, selected, onToggle, 
       <div className="relative shrink-0">
         <button
           type="button"
-          onClick={() => (selectMode ? onToggle() : onOpen())}
+          onClick={(e) => selectOrOpenClick(e, selectMode, onToggle, onOpen)}
           className="relative block h-12 w-16 overflow-hidden rounded-lg bg-subtle sm:h-14 sm:w-20"
           aria-label={selectMode ? `${selected ? "Deselect" : "Select"} ${asset.title}` : `Preview ${asset.title}`}
         >
@@ -1472,7 +1473,7 @@ function MediaRow({ asset, thumbUrl, onVisible, selectMode, selected, onToggle, 
         </button>
         <SelectBox selected={selected} visible={selectMode} onToggle={onToggle} label={`Select ${asset.title}`} />
       </div>
-      <button type="button" onClick={() => (selectMode ? onToggle() : onOpen())} className="min-w-0 flex-1 text-left">
+      <button type="button" onClick={(e) => selectOrOpenClick(e, selectMode, onToggle, onOpen)} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-semibold text-heading" title={asset.title}>
           {asset.title}
         </p>

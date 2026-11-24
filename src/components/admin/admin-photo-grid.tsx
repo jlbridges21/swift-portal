@@ -317,7 +317,8 @@ function PhotoThumb({
       ) : (
         <div className="h-full w-full animate-pulse bg-border/60" />
       )}
-      {selected && <div className="absolute inset-0 bg-slate-900/45" />}
+      {/* Click-through so both clicks of a double-click land on the same element. */}
+      {selected && <div className="pointer-events-none absolute inset-0 bg-slate-900/45" />}
     </div>
   );
 }
@@ -541,10 +542,14 @@ function SortablePhotoCard({
           skipNextClick.current = false;
           return;
         }
+        // The second click of a double-click opens the photo. Read the click count rather
+        // than waiting for `dblclick`: browsers skip `dblclick` when the element under the
+        // pointer changes between clicks (selecting a tile re-renders its overlays).
+        if (!coarsePointer && e.detail >= 2) {
+          if (e.detail === 2) onOpen(e, photo);
+          return;
+        }
         onActivate(e, photo.id, index);
-      }}
-      onDoubleClick={(e) => {
-        if (!coarsePointer && !placementMode) onOpen(e, photo);
       }}
       onContextMenu={(e) => {
         if (placementMode || coarsePointer) return;
@@ -746,7 +751,7 @@ function SortablePhotoCard({
 
 type MenuState = { anchor: ActionMenuAnchor; title: string; items: ActionMenuItem[] };
 
-/** Selection as it was just before a click toggled it — lets a double-click undo its two clicks. */
+/** Selection as it was just before a click toggled it — lets a double-click undo its first click. */
 type RecentClick = { id: string; at: number; before: Set<string>; anchorBefore: number | null };
 
 /** Longest gap between the two clicks of a double-click (OS settings top out around here). */
@@ -900,7 +905,7 @@ export function AdminPhotoGrid({
   const selectionBeforeMarquee = useRef<Set<string>>(new Set());
   const photosRef = useRef(photos);
   const justDraggedRef = useRef(false);
-  const recentClicksRef = useRef<RecentClick[]>([]);
+  const recentClickRef = useRef<RecentClick | null>(null);
   const paintSelectActive = useRef(false);
   const undoSnapshotRef = useRef<MediaAsset[] | null>(null);
   const fileDragDepth = useRef(0);
@@ -1192,7 +1197,7 @@ export function AdminPhotoGrid({
 
     if (e.shiftKey && anchorIndex != null) {
       e.preventDefault();
-      recentClicksRef.current = [];
+      recentClickRef.current = null;
       const from = Math.min(anchorIndex, index);
       const to = Math.max(anchorIndex, index);
       setSelectedIds(new Set(visiblePhotos.slice(from, to + 1).map((p) => p.id)));
@@ -1202,10 +1207,7 @@ export function AdminPhotoGrid({
     // Plain and Cmd/Ctrl clicks both toggle, instantly. A double-click restores
     // `before` from its first click, so opening a photo never changes selection.
     if (e.metaKey || e.ctrlKey) e.preventDefault();
-    recentClicksRef.current = [
-      ...recentClicksRef.current.slice(-1),
-      { id, at: e.timeStamp, before: selectedIds, anchorBefore: anchorIndex },
-    ];
+    recentClickRef.current = { id, at: e.timeStamp, before: selectedIds, anchorBefore: anchorIndex };
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -1216,16 +1218,9 @@ export function AdminPhotoGrid({
   }
 
   function handleOpen(e: ReactMouseEvent, photo: MediaAsset) {
-    const [first, second] = recentClicksRef.current;
-    recentClicksRef.current = [];
-    if (
-      first &&
-      second &&
-      first.id === photo.id &&
-      second.id === photo.id &&
-      second.at - first.at <= DOUBLE_CLICK_WINDOW_MS &&
-      e.timeStamp - second.at <= DOUBLE_CLICK_WINDOW_MS
-    ) {
+    const first = recentClickRef.current;
+    recentClickRef.current = null;
+    if (first && first.id === photo.id && e.timeStamp - first.at <= DOUBLE_CLICK_WINDOW_MS) {
       setSelectedIds(first.before);
       setAnchorIndex(first.anchorBefore);
     }
