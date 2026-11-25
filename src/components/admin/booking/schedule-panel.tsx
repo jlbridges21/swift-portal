@@ -25,8 +25,10 @@ export async function bookingPost(payload: Record<string, unknown>) {
 
 /**
  * Schedule or reschedule a project's shoot through the booking engine: open times for a day,
- * or any exact time (checked against every rule). Conflicts can be overridden only by an
- * owner/admin, after an explicit confirmation with a reason.
+ * or any exact time.
+ * - Owner/admin (`canOverride`): any time books straight away. Open times are only a guide;
+ *   availability rules exist to limit what clients can book, not the business itself.
+ * - Staff: the time is checked against every rule; conflicts need an owner/admin.
  */
 export function SchedulePanel({
   projectId,
@@ -49,9 +51,11 @@ export function SchedulePanel({
   canOverride: boolean;
   onDone: () => void;
   submitLabel?: string;
-  /** Shoot Calendar (owner/admin): any time books straight away, overriding availability. */
+  /** Kept for callers; owners/admins (`canOverride`) always book any time now. */
   calendarOverride?: boolean;
 }) {
+  // The business books its own shoots wherever it wants; only client bookings follow open times.
+  const anyTime = calendarOverride || canOverride;
   const [day, setDay] = useState(
     () => zonedParts(initialStart ? Date.parse(initialStart) : Date.now() + 24 * 3600_000, timeZone).dayKey
   );
@@ -111,7 +115,7 @@ export function SchedulePanel({
       start,
       userId: userId === "any" ? (slotUser ?? null) : userId,
       ...(overrideReason ? { overrideReason, confirmOverride: true } : {}),
-      ...(calendarOverride && !overrideReason ? { calendarOverride: true } : {}),
+      ...(anyTime && !overrideReason ? { calendarOverride: true } : {}),
     });
     setBusy(false);
     if (res.ok) {
@@ -189,13 +193,15 @@ export function SchedulePanel({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted">No open times on this day. You can still pick an exact time below.</p>
+          <p className="text-sm text-muted">
+            {anyTime ? "No open times on this day. Pick any time below and it's booked." : "No open times on this day. You can still pick an exact time below."}
+          </p>
         )}
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-foreground">Or an exact time</span>
+          <span className="text-xs font-medium text-foreground">{anyTime ? "Or any time" : "Or an exact time"}</span>
           <input
             type="time"
             value={manualTime}
@@ -207,9 +213,12 @@ export function SchedulePanel({
             className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
           />
         </label>
-        <Button type="button" variant="outline" onClick={runCheck} disabled={!manualIso()}>
-          Check time
-        </Button>
+        {/* Owners don't need to check: any time they pick is booked. */}
+        {!anyTime ? (
+          <Button type="button" variant="outline" onClick={runCheck} disabled={!manualIso()}>
+            Check time
+          </Button>
+        ) : null}
       </div>
 
       {check ? (

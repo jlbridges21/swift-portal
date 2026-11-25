@@ -250,10 +250,11 @@ async function schedule(ctx: BookingContext, facts: BookingProjectFacts, access:
   if (!access.canManage) return NextResponse.json({ error: "You don't have permission to schedule shoots." }, { status: 403 });
   const start = parseStart(body.start);
   if (start == null) return NextResponse.json({ error: "Choose a date and time." }, { status: 400 });
-  // Shoot Calendar bookings are a manual override by design (owner/admin): any time, any length.
+  // Owner/admin bookings (Shoot Calendar, project reschedule) are a manual override by design:
+  // any time, any length. Open times and availability rules only limit client bookings.
   const calendarOverride = body.calendarOverride === true && access.canOverride;
   const overrideReason = calendarOverride
-    ? "Booked from the Shoot Calendar"
+    ? "Booked by the business"
     : typeof body.overrideReason === "string"
       ? body.overrideReason.trim()
       : "";
