@@ -136,9 +136,19 @@ type OAuthState = {
   businessId: string;
   userId: string;
   returnOrigin: string;
+  /** Admin page to land on after connecting (e.g. /admin/calendar). Defaults to Settings → Integrations. */
+  returnPath?: string;
   exp: number;
   nonce: string;
 };
+
+/** Only same-portal admin paths, never another origin. */
+export function safeOutlookReturnPath(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  const clean = path.split("#")[0].split("?")[0];
+  if (!/^\/admin(\/[A-Za-z0-9_\-\/]*)?$/.test(clean) || clean.includes("//")) return undefined;
+  return clean;
+}
 
 function stateSecret(): string {
   const secret = clientSecret() || process.env.PLATFORM_SESSION_SECRET?.trim() || "";
@@ -146,11 +156,18 @@ function stateSecret(): string {
   return `outlook-calendar-state:${secret}`;
 }
 
-export function signOutlookOAuthState(payload: { businessId: string; userId: string; returnOrigin: string; exp?: number }): string {
+export function signOutlookOAuthState(payload: {
+  businessId: string;
+  userId: string;
+  returnOrigin: string;
+  returnPath?: string;
+  exp?: number;
+}): string {
   const body: OAuthState = {
     businessId: payload.businessId,
     userId: payload.userId,
     returnOrigin: payload.returnOrigin,
+    ...(safeOutlookReturnPath(payload.returnPath) ? { returnPath: safeOutlookReturnPath(payload.returnPath) } : {}),
     exp: payload.exp ?? Date.now() + STATE_TTL_MS,
     nonce: randomBytes(16).toString("base64url"),
   };

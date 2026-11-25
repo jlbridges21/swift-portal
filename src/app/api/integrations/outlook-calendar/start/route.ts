@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getTenantContext, missingTenantResponse } from "@/lib/tenant";
 import { isOwnerAdmin } from "@/lib/staff-access";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
-import { outlookAuthUrl, outlookCalendarConfigured, signOutlookOAuthState } from "@/lib/outlook-calendar";
+import { outlookAuthUrl, outlookCalendarConfigured, safeOutlookReturnPath, signOutlookOAuthState } from "@/lib/outlook-calendar";
 
 /** Starts Microsoft sign-in for the business's Outlook calendar (owner only). */
 export async function GET(request: Request) {
@@ -32,6 +32,7 @@ export async function GET(request: Request) {
     returnOrigin = portalOrigin;
   }
 
-  const state = signOutlookOAuthState({ businessId: tenant.businessId, userId: profile.id, returnOrigin });
+  const returnPath = safeOutlookReturnPath(new URL(request.url).searchParams.get("return"));
+  const state = signOutlookOAuthState({ businessId: tenant.businessId, userId: profile.id, returnOrigin, returnPath });
   return NextResponse.redirect(outlookAuthUrl(state));
 }
