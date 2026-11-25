@@ -158,6 +158,8 @@ interface ShootCalendarProps {
   googleSource: Promise<CalendarGoogleResult> | null;
   createProjectsSource: Promise<CalendarCreateProject[]>;
   canLoadExternal?: boolean;
+  /** Owner: show the business's Outlook calendars (read-only) beside Google ones. */
+  canLoadOutlook?: boolean;
   canChooseColors?: boolean;
   calendarColors?: ViewerCalendarColorPrefs;
   businessTimeZone?: string;
@@ -174,6 +176,11 @@ type GoogleStatus = "loading" | "ready" | "degraded" | "unavailable" | "error";
 /** One item in the Week grid: a ShootPortal shoot (draggable) or a read-only Google event. */
 type WeekItem = WeekGridEvent &
   ({ kind: "shoot"; key: string; shoot: CalendarShoot } | { kind: "google"; key: string; event: ExternalCalendarEvent });
+
+/** Outlook events/calendars carry an "outlook:" id prefix; everything else is Google. */
+function externalProvider(calendarId: string): "Google" | "Outlook" {
+  return calendarId.startsWith("outlook:") ? "Outlook" : "Google";
+}
 
 function externalKey(event: ExternalCalendarEvent) {
   return `${event.calendarId}:${event.id}`;
@@ -417,7 +424,7 @@ function GoogleEventCard({
           className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: requested, boxShadow: `0 0 0 1px ${paint.foreground}` }}
         />
-        <span className="shrink-0 font-medium">Google</span>
+        <span className="shrink-0 font-medium">{externalProvider(event.calendarId)}</span>
       </span>
     </>
   );
@@ -762,7 +769,7 @@ function GoogleAllDayChip({ event, onOpen }: { event: ExternalCalendarEvent; onO
         e.stopPropagation();
         onOpen();
       }}
-      title={`${event.title} · All day · Google (read-only)`}
+      title={`${event.title} · All day · ${externalProvider(event.calendarId)} (read-only)`}
       className="flex h-5 w-full min-w-0 items-center gap-1 rounded-md border bg-card px-1 text-left text-[11px] font-medium text-heading sm:px-1.5"
       style={{ borderColor: color, borderLeftWidth: 3 }}
     >
@@ -799,7 +806,7 @@ function weekBlockAppearance(
   return {
     className: "bg-card text-heading",
     style: { borderLeftColor: color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` },
-    title: `${item.event.title} · ${item.event.timeLabel} · Google (${item.event.calendarSummary}) — read-only`,
+    title: `${item.event.title} · ${item.event.timeLabel} · ${externalProvider(item.event.calendarId)} (${item.event.calendarSummary}) — read-only`,
   };
 }
 
@@ -809,6 +816,7 @@ export function ShootCalendar({
   googleSource,
   createProjectsSource,
   canLoadExternal = false,
+  canLoadOutlook = false,
   canChooseColors = false,
   calendarColors: initialColors = {},
   businessTimeZone = "America/New_York",
@@ -840,6 +848,14 @@ export function ShootCalendar({
   const [covers, setCovers] = useState<Record<string, string | null>>({});
   const [createProjects, setCreateProjects] = useState<CalendarCreateProject[]>([]);
   const [googleCalendars, setGoogleCalendars] = useState<AccountCalendar[]>([]);
+  // Outlook (business connection, owner only): own calendars/events/visibility, merged at display.
+  const [outlookCalendars, setOutlookCalendars] = useState<AccountCalendar[]>([]);
+  const [outlookEvents, setOutlookEvents] = useState<ExternalCalendarEvent[]>([]);
+  const [outlookHidden, setOutlookHidden] = useState<string[]>([]);
+  const [outlookWindow, setOutlookWindow] = useState<{ from: string; to: string } | null>(null);
+  const [outlookStatus, setOutlookStatus] = useState<"idle" | "loading" | "ready" | "degraded" | "error">("idle");
+  const [outlookRetry, setOutlookRetry] = useState(0);
+  const [outlookOpen, setOutlookOpen] = useState(true);
   const [externalEvents, setExternalEvents] = useState<ExternalCalendarEvent[]>([]);
   const [externalWindow, setExternalWindow] = useState<{ from: string; to: string } | null>(null);
   const [loadedCalendarIds, setLoadedCalendarIds] = useState<string[]>([]);
@@ -936,10 +952,12 @@ export function ShootCalendar({
     [showShoots, sortedShoots, anchor]
   );
   const shownExternal = useMemo(() => {
-    if (!canLoadExternal) return [];
     const hidden = new Set(hiddenCalendarIds);
-    return externalEvents.filter((event) => !hidden.has(event.calendarId));
-  }, [canLoadExternal, externalEvents, hiddenCalendarIds]);
+    const google = canLoadExternal ? externalEvents.filter((event) => !hidden.has(event.calendarId)) : [];
+    if (!canLoadOutlook || !outlookEvents.length) return google;
+    const hiddenOutlook = new Set(outlookHidden);
+    return [...google, ...outlookEvents.filter((event) => !hiddenOutlook.has(event.calendarId))];
+  }, [canLoadExternal, externalEvents, hiddenCalendarIds, canLoadOutlook, outlookEvents, outlookHidden]);
   const visibleShoots = useMemo(
     () => (showShoots ? sortedShoots : []),
     [showShoots, sortedShoots]
@@ -1076,6 +1094,51 @@ export function ShootCalendar({
     // externalWindow identity changes only with a new window fetch, which also resets the loaded set.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missingKey, externalWindow]);
+
+  // ── Outlook: load the window around the view when it isn't covered yet (all calendars at once) ──
+  useEffect(() => {
+    if (!canLoadOutlook) return;
+    const covered =
+      outlookWindow && Date.parse(outlookWindow.from) <= needFromMs && Date.parse(outlookWindow.to) >= needToMs;
+    if (covered && outlookRetry === 0) return;
+    const win = googleWindowFor(new Date(needFromMs + (needToMs - needFromMs) / 2));
+    const controller = new AbortController();
+    setOutlookStatus("loading");
+    fetch(`/api/integrations/outlook-calendar/events?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as {
+          connected: boolean;
+          calendars: AccountCalendar[];
+          hiddenCalendarIds: string[];
+          colors: Record<string, string>;
+          events: ExternalCalendarEvent[];
+          degraded: boolean;
+        };
+        setOutlookCalendars(data.connected ? data.calendars : []);
+        setOutlookHidden(data.hiddenCalendarIds);
+        setOutlookEvents(data.events);
+        setOutlookWindow(win);
+        if (Object.keys(data.colors).length) {
+          setCalendarColors((current) => ({ ...current, calendars: { ...(current.calendars || {}), ...data.colors } }));
+        }
+        setOutlookStatus(!data.connected ? "idle" : data.degraded ? "degraded" : "ready");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setOutlookStatus("error");
+        setOutlookWindow(win);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setOutlookRetry(0);
+      });
+    return () => controller.abort();
+    // outlookWindow is read only to skip covered ranges; a new window comes from this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canLoadOutlook, needFromMs, needToMs, outlookRetry]);
 
   useLayoutEffect(() => {
     if (view !== "agenda") return;
@@ -1287,12 +1350,15 @@ export function ShootCalendar({
       return next;
     });
     if (!canChooseColors) return;
-    const res = await fetch("/api/integrations/google-calendar/calendars", {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ color: { key, value } }),
-    }).catch(() => null);
+    const res = await fetch(
+      key.startsWith("outlook:") ? "/api/integrations/outlook-calendar/display" : "/api/integrations/google-calendar/calendars",
+      {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color: { key, value } }),
+      }
+    ).catch(() => null);
     if (!res?.ok) {
       const data = (await res?.json().catch(() => ({}))) as { error?: string };
       toast.error(data.error || "Could not save calendar color");
@@ -1305,6 +1371,20 @@ export function ShootCalendar({
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     const top = rect.bottom + 6;
     setColorMenu({ key, label, fallback, top, left });
+  }
+
+  async function persistOutlookHidden(next: string[]) {
+    setOutlookHidden(next);
+    const res = await fetch("/api/integrations/outlook-calendar/display", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hiddenCalendarIds: next }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => ({}))) as { error?: string };
+      toast.error(data.error || "Could not save Outlook calendar visibility");
+    }
   }
 
   async function persistHidden(next: string[]) {
@@ -1621,6 +1701,79 @@ export function ShootCalendar({
                                 calendar.summary,
                                 calendar.backgroundColor || "#7C3AED"
                               )
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {canLoadOutlook && (outlookCalendars.length || outlookStatus === "error") ? (
+              <div>
+                <button
+                  type="button"
+                  className="mb-1 flex w-full items-center justify-between text-xs font-semibold text-heading"
+                  onClick={() => setOutlookOpen((open) => !open)}
+                  aria-expanded={outlookOpen}
+                >
+                  Outlook calendars
+                  <ChevronRight className={cn("h-3.5 w-3.5 transition", outlookOpen && "rotate-90")} />
+                </button>
+                {outlookOpen ? (
+                  <div className="space-y-1">
+                    {outlookStatus === "error" || outlookStatus === "degraded" ? (
+                      <p className="text-[11px] text-amber-700 surface-dark:text-amber-300">
+                        {outlookStatus === "error" ? "Outlook events couldn’t load. " : "Some Outlook calendars didn’t load. "}
+                        <button type="button" className="font-semibold underline" onClick={() => setOutlookRetry((n) => n + 1)}>
+                          Retry
+                        </button>
+                      </p>
+                    ) : null}
+                    {outlookCalendars.length ? (
+                      <div className="flex gap-2 text-[11px]">
+                        <button type="button" className="text-blue-700 underline" onClick={() => void persistOutlookHidden([])}>
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="text-blue-700 underline"
+                          onClick={() => void persistOutlookHidden(outlookCalendars.map((calendar) => calendar.id))}
+                        >
+                          Hide all
+                        </button>
+                      </div>
+                    ) : null}
+                    {outlookCalendars.map((calendar) => {
+                      const checked = !outlookHidden.includes(calendar.id);
+                      return (
+                        <div key={calendar.id} className="flex h-8 min-w-0 items-center gap-2 text-sm">
+                          <label className="flex min-w-0 flex-1 items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const next = checked
+                                  ? [...outlookHidden, calendar.id]
+                                  : outlookHidden.filter((id) => id !== calendar.id);
+                                void persistOutlookHidden(next);
+                              }}
+                            />
+                            <span className="min-w-0 truncate">{calendar.summary}</span>
+                            {calendar.primary ? <span className="sr-only">Default calendar</span> : null}
+                          </label>
+                          <button
+                            type="button"
+                            data-color-trigger
+                            className="h-3.5 w-3.5 shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                            style={{ backgroundColor: colorFor(calendar.id, calendar.backgroundColor) }}
+                            aria-label={`${calendar.summary} color`}
+                            aria-haspopup="dialog"
+                            aria-expanded={colorMenu?.key === calendar.id}
+                            onClick={(event) =>
+                              openColorMenu(event, calendar.id, calendar.summary, calendar.backgroundColor || "#7C3AED")
                             }
                           />
                         </div>
@@ -1986,12 +2139,18 @@ export function ShootCalendar({
         onConfirm={() => void confirmMove()}
       />
 
-      <Modal open={!!openedExternal} onClose={() => setOpenedExternal(null)} title="Google Calendar">
+      <Modal
+        open={!!openedExternal}
+        onClose={() => setOpenedExternal(null)}
+        title={`${openedExternal ? externalProvider(openedExternal.calendarId) : "Google"} Calendar`}
+      >
         {openedExternal ? (
           <div className="space-y-4">
             <p className="text-base font-semibold text-heading">{openedExternal.title}</p>
             <p className="text-sm text-indigo-800">{openedExternal.allDay ? "All day" : openedExternal.timeLabel}</p>
-            <p className="text-sm text-muted">Google · {openedExternal.calendarSummary}</p>
+            <p className="text-sm text-muted">
+              {externalProvider(openedExternal.calendarId)} · {openedExternal.calendarSummary}
+            </p>
             <p className="text-sm text-muted">This event is read-only in ShootPortal.</p>
             {openedExternal.htmlLink ? (
               <a
@@ -2000,10 +2159,12 @@ export function ShootCalendar({
                 rel="noopener noreferrer"
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-3 text-sm font-medium text-indigo-900"
               >
-                Open in Google Calendar <ExternalLink className="h-4 w-4" />
+                Open in {externalProvider(openedExternal.calendarId)} Calendar <ExternalLink className="h-4 w-4" />
               </a>
             ) : (
-              <p className="text-sm text-muted">Google did not provide a link for this event.</p>
+              <p className="text-sm text-muted">
+                {externalProvider(openedExternal.calendarId)} did not provide a link for this event.
+              </p>
             )}
           </div>
         ) : null}

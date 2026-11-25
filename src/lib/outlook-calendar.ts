@@ -22,6 +22,7 @@ import { buildEventText } from "@/lib/booking/event-template";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { openWithPurpose, sealWithPurpose } from "@/lib/purpose-cipher";
+import { toExternalEvent, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -982,4 +983,197 @@ export async function outlookDailyUpkeep(businessId: string): Promise<{ ok: bool
   } catch {
     return { ok: false, retried: 0 };
   }
+}
+
+// ── Shoot Calendar display (v138) ───────────────────────────────────────────
+// Outlook events shown read-only on the Shoot Calendar, beside Google events. Ids are prefixed
+// "outlook:" on the way out so they never collide with Google calendar/event ids in the client.
+
+export const OUTLOOK_DISPLAY_PREFIX = "outlook:";
+
+type GraphDisplayEvent = GraphViewEvent & { subject?: string; webLink?: string };
+
+/** Every displayable event (incl. free and all-day; not cancelled/declined) on one calendar. */
+export async function listOutlookDisplayEvents(
+  token: string,
+  calendarId: string,
+  fromIso: string,
+  toIso: string,
+  transport: FetchLike = timedFetch
+): Promise<GraphDisplayEvent[]> {
+  const out: GraphDisplayEvent[] = [];
+  const params = new URLSearchParams({
+    startDateTime: fromIso,
+    endDateTime: toIso,
+    $select: "id,subject,webLink,isAllDay,isCancelled,showAs,start,end,responseStatus",
+    $top: "250",
+  });
+  let next: string | null = `/me/calendars/${encodeURIComponent(calendarId)}/calendarView?${params.toString()}`;
+  for (let page = 0; page < 8 && next; page++) {
+    const res = await graph(token, next, { transport });
+    if (!res.ok) throw await graphError(res, "calendarView");
+    const json = (await res.json()) as { value?: GraphDisplayEvent[]; "@odata.nextLink"?: string };
+    for (const e of json.value ?? []) {
+      if (!e.id || e.isCancelled || e.responseStatus?.response === "declined") continue;
+      out.push(e);
+    }
+    next = json["@odata.nextLink"] ?? null;
+  }
+  return out;
+}
+
+/** Graph event (UTC wall times) → the Google-shaped input toExternalEvent understands. */
+export function outlookEventAsGoogleShape(e: GraphDisplayEvent) {
+  const startRaw = e.start?.dateTime ?? "";
+  const endRaw = e.end?.dateTime ?? "";
+  if (e.isAllDay) {
+    // All-day events are floating dates: keep the calendar date, end is exclusive (like Google).
+    return {
+      id: e.id,
+      summary: e.subject,
+      htmlLink: e.webLink,
+      start: { date: startRaw.slice(0, 10) },
+      end: endRaw ? { date: endRaw.slice(0, 10) } : undefined,
+    };
+  }
+  const toIso = (raw: string) => {
+    const ms = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`);
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : "";
+  };
+  const start = toIso(startRaw);
+  const end = endRaw ? toIso(endRaw) : "";
+  return {
+    id: e.id,
+    summary: e.subject,
+    htmlLink: e.webLink,
+    start: start ? { dateTime: start } : {},
+    end: end ? { dateTime: end } : undefined,
+  };
+}
+
+export type OutlookDisplayCalendar = {
+  id: string;
+  summary: string;
+  primary: boolean;
+  backgroundColor: string | null;
+  accessRole: string | null;
+};
+
+export type OutlookDisplayWindow = {
+  connected: boolean;
+  status: "disconnected" | "active" | "needs_reconnect";
+  /** False until migration v138: choices show but aren't saved. */
+  prefsReady: boolean;
+  calendars: OutlookDisplayCalendar[];
+  hiddenCalendarIds: string[];
+  colors: Record<string, string>;
+  events: ExternalCalendarEvent[];
+  degraded: boolean;
+};
+
+async function readDisplayPrefs(
+  businessId: string
+): Promise<{ ready: boolean; hidden: string[] | null; colors: Record<string, string> }> {
+  const db = await createTenantServiceClient(businessId);
+  const { data, error } = await db
+    .from("outlook_calendar_connections")
+    .select("display_hidden_calendar_ids, display_calendar_colors")
+    .maybeSingle();
+  if (error || !data) return { ready: !error, hidden: null, colors: {} };
+  const row = data as { display_hidden_calendar_ids: string[] | null; display_calendar_colors: Record<string, string> | null };
+  return { ready: true, hidden: row.display_hidden_calendar_ids, colors: row.display_calendar_colors || {} };
+}
+
+const prefixId = (id: string) => `${OUTLOOK_DISPLAY_PREFIX}${id}`;
+const unprefixId = (id: string) => (id.startsWith(OUTLOOK_DISPLAY_PREFIX) ? id.slice(OUTLOOK_DISPLAY_PREFIX.length) : id);
+
+/** Outlook calendars + events for the Shoot Calendar window (all calendars; the client filters). */
+export async function loadOutlookDisplayWindow(
+  businessId: string,
+  fromIso: string,
+  toIso: string,
+  timeZone: string
+): Promise<OutlookDisplayWindow> {
+  const empty: OutlookDisplayWindow = {
+    connected: false,
+    status: "disconnected",
+    prefsReady: false,
+    calendars: [],
+    hiddenCalendarIds: [],
+    colors: {},
+    events: [],
+    degraded: false,
+  };
+  const access = await getOutlookAccess(businessId);
+  if (!access.ok) {
+    if (access.error === "not_connected") return empty;
+    return { ...empty, connected: true, status: "needs_reconnect", degraded: true };
+  }
+  const [calendars, prefs, ownRows] = await Promise.all([
+    listOutlookCalendars(access.token),
+    readDisplayPrefs(businessId),
+    createTenantServiceClient(businessId).then((db) =>
+      db.from("outlook_calendar_events").select("event_id").not("event_id", "is", null)
+    ),
+  ]);
+  // ShootPortal's own shoots are already on the grid: don't show their Outlook copies too.
+  const ownIds = new Set(((ownRows.data ?? []) as { event_id: string }[]).map((r) => r.event_id));
+  const hiddenRaw = prefs.hidden ?? calendars.filter((c) => !c.canEdit).map((c) => c.id);
+  const colors: Record<string, string> = {};
+  for (const [id, color] of Object.entries(prefs.colors)) colors[prefixId(id)] = color;
+
+  let degraded = false;
+  const events: OutlookDisplayWindow["events"] = [];
+  await Promise.all(
+    calendars.map(async (cal) => {
+      try {
+        const raw = await listOutlookDisplayEvents(access.token, cal.id, fromIso, toIso);
+        for (const e of raw) {
+          if (e.id && ownIds.has(e.id)) continue;
+          const shaped = toExternalEvent(outlookEventAsGoogleShape(e), prefixId(cal.id), cal.name, timeZone, cal.color);
+          if (shaped) events.push({ ...shaped, id: prefixId(shaped.id) });
+        }
+      } catch {
+        degraded = true;
+      }
+    })
+  );
+
+  return {
+    connected: true,
+    status: "active",
+    prefsReady: prefs.ready,
+    calendars: calendars.map((c) => ({
+      id: prefixId(c.id),
+      summary: c.name,
+      primary: c.isDefault,
+      backgroundColor: c.color,
+      accessRole: c.canEdit ? "owner" : "reader",
+    })),
+    hiddenCalendarIds: hiddenRaw.map(prefixId),
+    colors,
+    events,
+    degraded,
+  };
+}
+
+export async function setOutlookDisplayHidden(businessId: string, hidden: string[]): Promise<string[]> {
+  const ids = [...new Set(hidden.map((id) => unprefixId(id.trim())).filter((id) => id && id.length <= 512))].slice(0, 100);
+  await updateConnection(businessId, { display_hidden_calendar_ids: ids });
+  return ids.map(prefixId);
+}
+
+export async function setOutlookDisplayColor(businessId: string, key: string, color: string | null): Promise<Record<string, string>> {
+  const id = unprefixId(key.trim());
+  if (!id || id.length > 512) throw new Error("Invalid calendar.");
+  if (color !== null && !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color.trim())) throw new Error("Use a hex color, like #2563EB.");
+  const prefs = await readDisplayPrefs(businessId);
+  if (!prefs.ready) throw new Error("Apply database migration v138 to save Outlook calendar colors.");
+  const next = { ...prefs.colors };
+  if (color === null) delete next[id];
+  else next[id] = color.trim();
+  await updateConnection(businessId, { display_calendar_colors: next });
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(next)) out[prefixId(k)] = v;
+  return out;
 }

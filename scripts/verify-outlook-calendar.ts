@@ -159,6 +159,28 @@ async function main() {
     assert(busy[0].start === Date.parse("2026-12-01T15:00:00Z") && busy[0].end === Date.parse("2026-12-01T16:30:00Z"), "UTC wall times parsed as instants");
   }
 
+  // Shoot Calendar display: Graph event → ExternalCalendarEvent (same converter Google uses)
+  {
+    const { toExternalEvent } = await import("../src/lib/google-calendar-pull");
+    const timed = toExternalEvent(
+      m.outlookEventAsGoogleShape({ id: "e1", subject: "Dentist", webLink: "https://outlook.live.com/x", start: { dateTime: "2026-12-01T15:00:00.0000000" }, end: { dateTime: "2026-12-01T16:30:00.0000000" } }),
+      "outlook:cal-1",
+      "Calendar",
+      "America/New_York",
+      null
+    );
+    assert(timed && !timed.allDay && timed.dayKeys.join() === "2026-12-01" && timed.timeLabel === "10:00 AM – 11:30 AM", "timed Outlook event lands at local business time");
+    assert(timed?.htmlLink === "https://outlook.live.com/x" && timed?.title === "Dentist", "title + Outlook link carried over");
+    const allDay = toExternalEvent(
+      m.outlookEventAsGoogleShape({ id: "e2", subject: "Vacation", isAllDay: true, start: { dateTime: "2026-12-24T00:00:00.0000000" }, end: { dateTime: "2026-12-26T00:00:00.0000000" } }),
+      "outlook:cal-1",
+      "Calendar",
+      "America/New_York",
+      null
+    );
+    assert(allDay?.allDay && allDay.dayKeys.join() === "2026-12-24,2026-12-25", "all-day Outlook event keeps its dates (end exclusive)");
+  }
+
   console.log("\nAll Outlook Calendar checks passed.");
 }
 
