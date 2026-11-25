@@ -19,6 +19,7 @@ import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getBusinessPortalOriginById, isPlatformApexHostname } from "@/lib/portal-url";
 import { decryptCalendarSecret, encryptCalendarSecret } from "@/lib/google-calendar-crypto";
 import { isSafeCssColor } from "@/lib/brand-color";
+import { googleEventDetails, type ExternalEventDetails } from "@/lib/external-event-details";
 import {
   listGoogleEvents,
   resolveReadCalendarIds,
@@ -1496,4 +1497,27 @@ export async function disconnectGoogleCalendar(businessId: string): Promise<{
   const db = await createTenantServiceClient(businessId);
   await db.from("google_calendar_connections").delete().eq("business_id", businessId);
   return { revoked, revokeStatus };
+}
+
+/** Full details for one Google event on the Shoot Calendar (owner only; nothing stored). */
+export async function getGoogleEventDetails(
+  businessId: string,
+  calendarId: string,
+  eventId: string
+): Promise<ExternalEventDetails> {
+  const auth = await accessTokenFor(businessId, timedFetch);
+  if (!auth.ok) throw new Error("Google Calendar is not connected.");
+  const url = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+  );
+  url.searchParams.set(
+    "fields",
+    "description,location,hangoutLink,recurringEventId,transparency,visibility,organizer,creator,attendees,conferenceData(conferenceSolution/name,entryPoints),attachments(title,fileUrl)"
+  );
+  const res = await timedFetch(url.toString(), { headers: { Authorization: `Bearer ${auth.token}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(redact(text.slice(0, 300)) || `events.get ${res.status}`);
+  }
+  return googleEventDetails(await res.json());
 }

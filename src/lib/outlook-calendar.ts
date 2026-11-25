@@ -23,6 +23,7 @@ import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { openWithPurpose, sealWithPurpose } from "@/lib/purpose-cipher";
 import { toExternalEvent, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
+import { outlookEventDetails, type ExternalEventDetails } from "@/lib/external-event-details";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -1214,4 +1215,27 @@ async function ownCalendarEventOutlookIds(businessId: string): Promise<string[]>
   } catch {
     return [];
   }
+}
+
+/**
+ * Full details for one Outlook event on the Shoot Calendar (owner only; nothing stored).
+ * Ids arrive prefixed "outlook:" from the display window.
+ */
+export async function getOutlookEventDetails(
+  businessId: string,
+  calendarId: string,
+  eventId: string,
+  transport: FetchLike = timedFetch
+): Promise<ExternalEventDetails> {
+  const access = await getOutlookAccess(businessId, transport);
+  if (!access.ok) throw new Error("Outlook is not connected.");
+  const select =
+    "body,bodyPreview,location,locations,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,organizer,attendees,seriesMasterId,type,showAs,sensitivity";
+  const path = `/me/calendars/${encodeURIComponent(unprefixId(calendarId))}/events/${encodeURIComponent(unprefixId(eventId))}?$select=${select}`;
+  const res = await graph(access.token, path, {
+    transport,
+    headers: { Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"' },
+  });
+  if (!res.ok) throw await graphError(res, "event details");
+  return outlookEventDetails(await res.json());
 }
