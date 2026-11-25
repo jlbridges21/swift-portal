@@ -27,11 +27,13 @@ import {
   formatHours,
   formatMilesShort,
   formatMinutes,
+  driveTripLabel,
   type AdjustmentKind,
   type PayLine,
   type PayPeriod,
   type PayStatement,
 } from "@/lib/team-pay/types";
+import { DriveLegList, InfoTip } from "./drive-legs";
 import { MoneyField } from "./money-field";
 
 /** What the owner can do to a statement; all return when the change is saved and reloaded. */
@@ -99,6 +101,21 @@ function DurationField({ minutes, onChange, label }: { minutes: number; onChange
   );
 }
 
+/** (i) beside the drive fields: what the total is made of, leg by leg. */
+function DriveInfo({ line }: { line: PayLine }) {
+  return (
+    <InfoTip label="What's counted in the drive">
+      <span className="block font-medium text-heading">Enter the total for this shoot</span>
+      <span className="mt-1 block text-muted">Every drive counted for this shoot, added together. Each leg below is one way.</span>
+      {line.driveLegs?.length ? (
+        <DriveLegList legs={line.driveLegs} className="mt-2 rounded-lg bg-subtle px-2.5 py-2" />
+      ) : (
+        <span className="mt-2 block rounded-lg bg-subtle px-2.5 py-2 text-muted">No planned route for this shoot. Enter what they drove.</span>
+      )}
+    </InfoTip>
+  );
+}
+
 function ShootEditor({ line, onSave, onCancel }: { line: PayLine; onSave: (patch: Record<string, unknown>) => Promise<boolean>; onCancel: () => void }) {
   const [onsite, setOnsite] = useState(line.onsiteMinutes);
   const [drive, setDrive] = useState(line.driveMinutes);
@@ -124,34 +141,51 @@ function ShootEditor({ line, onSave, onCancel }: { line: PayLine; onSave: (patch
     if (ok) onCancel();
   }
 
-  const edited = line.onsiteSource === "edited" || line.amountEdited || Boolean(line.note);
+  const edited = line.onsiteSource === "edited" || line.amountEdited || Boolean(line.note) || Boolean(line.driveEdited);
+  const plannedTrip = driveTripLabel(line.driveLegs);
+  const plannedLegMinutes = (line.driveLegs ?? []).reduce((sum, l) => sum + l.minutes, 0);
+  const plannedLegMiles = (line.driveLegs ?? []).reduce((sum, l) => sum + l.miles, 0);
   return (
     <div className="mt-3 space-y-3 rounded-xl border border-border bg-card p-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="block text-xs font-medium text-muted">Time on site</span>
+          <span className="flex h-5 items-center text-xs font-medium text-muted">Time on site</span>
           <DurationField label="Time on site" minutes={onsite} onChange={setOnsite} />
         </label>
         <label className="space-y-1">
-          <span className="block text-xs font-medium text-muted">Driving</span>
-          <DurationField label="Driving" minutes={drive} onChange={setDrive} />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-muted">Miles</span>
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            aria-label="Miles"
-            value={miles}
-            onChange={(e) => setMiles(e.target.value)}
-            className="h-11 w-28 rounded-lg border border-border bg-white px-3 text-sm text-foreground surface-dark:bg-card"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-muted">Pay a set amount instead</span>
+          <span className="flex h-5 items-center text-xs font-medium text-muted">Pay a set amount instead</span>
           <MoneyField className="w-32" ariaLabel="Set amount" placeholder="Worked out" valueCents={amount} onCommit={setAmount} />
         </label>
+        <div className="space-y-1">
+          <span className="flex h-5 items-center gap-1 text-xs font-medium text-muted">
+            Driving <span className="font-normal">· total for this shoot</span>
+            <DriveInfo line={line} />
+          </span>
+          <DurationField label="Driving, total for this shoot" minutes={drive} onChange={setDrive} />
+        </div>
+        <div className="space-y-1">
+          <span className="flex h-5 items-center gap-1 text-xs font-medium text-muted">
+            Miles <span className="font-normal">· total for this shoot</span>
+            <DriveInfo line={line} />
+          </span>
+          <span className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              aria-label="Miles, total for this shoot"
+              value={miles}
+              onChange={(e) => setMiles(e.target.value)}
+              className="h-11 w-28 rounded-lg border border-border bg-white px-3 text-sm text-foreground surface-dark:bg-card"
+            />
+            <span className="text-sm text-muted">mi</span>
+          </span>
+        </div>
+        {plannedTrip ? (
+          <p className="text-xs text-muted sm:col-span-2">
+            Planned: {plannedTrip} ({formatMinutes(plannedLegMinutes)} · {formatMilesShort(plannedLegMiles)}). If they drove somewhere else too, add it in.
+          </p>
+        ) : null}
       </div>
       <input
         value={note}
@@ -382,8 +416,9 @@ function LineRow({
                 {line.onsiteSource === "checked_in" ? " checked in" : line.onsiteSource === "edited" ? " adjusted" : ""}
               </Chip>
               {line.driveMinutes > 0 || line.miles > 0 ? (
-                <Chip icon={Car}>
+                <Chip icon={Car} tone={line.driveEdited ? "edited" : "plain"}>
                   {formatMinutes(line.driveMinutes)} · {formatMilesShort(line.miles)}
+                  {line.driveEdited ? " adjusted" : driveTripLabel(line.driveLegs) ? ` · ${driveTripLabel(line.driveLegs)}` : ""}
                 </Chip>
               ) : null}
               {line.services.length ? <Chip>{line.services.join(" + ")}</Chip> : null}
@@ -454,7 +489,14 @@ function LineRow({
             ) : (
               <p className="text-sm text-muted">Nothing to pay on this shoot yet.</p>
             )}
-            {line.includesDriveHome ? <p className="pt-1 text-xs text-muted">Includes the drive home.</p> : null}
+            {line.driveLegs?.length ? (
+              <div className="mt-1.5 border-t border-border pt-2">
+                <p className="mb-1 text-xs font-medium text-muted">{line.driveEdited ? "Planned drive (changed by hand above)" : "Drive counted"}</p>
+                <DriveLegList legs={line.driveLegs} />
+              </div>
+            ) : line.includesDriveHome ? (
+              <p className="pt-1 text-xs text-muted">Includes the drive home.</p>
+            ) : null}
             {line.note ? <p className="pt-1 text-xs text-foreground">Note: {line.note}</p> : null}
           </div>
 

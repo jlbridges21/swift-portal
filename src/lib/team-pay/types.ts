@@ -122,6 +122,18 @@ export type ShootFacts = {
   upcoming: boolean;
 };
 
+export type DriveLeg = { kind: "from_home" | "from_previous" | "home"; minutes: number; miles: number };
+
+/** "one way" / "there and back" / "drive home" for the legs a shoot counts. */
+export function driveTripLabel(legs: DriveLeg[] | undefined): string | null {
+  if (!legs?.length) return null;
+  const toShoot = legs.some((l) => l.kind !== "home");
+  const home = legs.some((l) => l.kind === "home");
+  if (toShoot && home) return legs.some((l) => l.kind === "from_home") ? "there and back" : "from last shoot + home";
+  if (home) return "drive home only";
+  return legs[0].kind === "from_previous" ? "from last shoot" : "one way";
+}
+
 export type PayFlagCode = "over_time" | "time_request" | "no_rate" | "no_drive" | "no_price";
 export type PayFlag = { code: PayFlagCode; message: string; minutes?: number };
 
@@ -145,6 +157,12 @@ export type PayLine = {
   miles: number;
   driveFrom: "home" | "previous" | null;
   includesDriveHome: boolean;
+  /**
+   * The planned drives counted for this shoot, each one way (absent on statements approved
+   * before this existed). `driveMinutes` / `miles` are their total unless `driveEdited`.
+   */
+  driveLegs?: DriveLeg[];
+  driveEdited?: boolean;
   /** Each part of the pay, so the statement can show how the amount was reached. */
   parts: { label: string; cents: number }[];
   amountCents: number;

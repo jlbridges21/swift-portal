@@ -18,6 +18,7 @@ import { buildExport, csvCell } from "../src/lib/team-pay/export";
 import { addDays, formatPeriod, isDateKey, periodContaining, shiftPeriod, weekStart } from "../src/lib/team-pay/periods";
 import {
   describePlan,
+  driveTripLabel,
   formatCents,
   formatMileRate,
   formatMinutes,
@@ -125,6 +126,18 @@ console.log("Driving");
   assert(second.miles === 12, "the drive between two shoots is always paid");
   const fee = computeShootLine(shoot(), plan({ ...base, driveType: "travel_fee" }), none, rules);
   assert(fee.amountCents === 12500 && fee.parts.some((p) => p.label === "Client's travel fee"), "travel fee: the client's fee passes through");
+  assert(hour.driveLegs?.length === 2 && driveTripLabel(hour.driveLegs) === "there and back", "both legs counted: 'there and back'");
+  assert(driveTripLabel(noHome.driveLegs) === "one way" && noHome.driveLegs?.[0].kind === "from_home", "drive home unpaid: 'one way' from home");
+  assert(driveTripLabel(noFirst.driveLegs) === "drive home only", "first drive unpaid: 'drive home only'");
+  assert(driveTripLabel(second.driveLegs) === "from last shoot", "second shoot of the day: 'from last shoot'");
+  assert(driveTripLabel(undefined) === null, "no legs (old statements): no label");
+  const editedDrive = computeShootLine(
+    shoot({ edit: { onsiteMinutes: null, driveMinutes: 90, miles: 70, amountCents: null, note: null, arrivedAt: null, doneAt: null } }),
+    plan({ ...base, driveType: "mile", mileCents: 100 }),
+    none,
+    rules
+  );
+  assert(editedDrive.driveEdited && editedDrive.miles === 70 && editedDrive.driveLegs?.length === 2, "a typed-in total is marked edited; planned legs stay for reference");
   const unknown = computeShootLine(shoot({ drive: null }), plan({ ...base, driveType: "mile", mileCents: 70 }), none, rules);
   assert(unknown.flags.some((f) => f.code === "no_drive") && unknown.amountCents === 10000, "an unknown route is flagged, never guessed");
   const notPaid = computeShootLine(shoot({ drive: null }), plan(base), none, rules);

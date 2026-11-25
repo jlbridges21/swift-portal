@@ -12,6 +12,7 @@ import {
   formatMilesShort,
   formatMinutes,
   type AdjustmentRow,
+  type DriveLeg,
   type PayFlag,
   type PayLine,
   type PayMember,
@@ -140,6 +141,9 @@ export function computeShootLine(
   // Driving that isn't paid by time or distance isn't tracked: hours here are paid hours.
   const countFirst = drive && paysDrive ? drive.from === "previous" || plan.payFirstDrive : false;
   const countHome = drive && paysDrive ? plan.payDriveHome && (drive.outMinutes > 0 || drive.outMiles > 0) : false;
+  const driveLegs: DriveLeg[] = [];
+  if (drive && countFirst) driveLegs.push({ kind: drive.from === "home" ? "from_home" : "from_previous", minutes: drive.inMinutes, miles: drive.inMiles });
+  if (drive && countHome) driveLegs.push({ kind: "home", minutes: drive.outMinutes, miles: drive.outMiles });
   let driveMinutes = drive ? (countFirst ? drive.inMinutes : 0) + (countHome ? drive.outMinutes : 0) : 0;
   let miles = drive ? (countFirst ? drive.inMiles : 0) + (countHome ? drive.outMiles : 0) : 0;
   if (edit?.driveMinutes != null) driveMinutes = edit.driveMinutes;
@@ -192,6 +196,8 @@ export function computeShootLine(
     miles,
     driveFrom: drive?.from ?? null,
     includesDriveHome: countHome,
+    driveLegs,
+    driveEdited: edit?.driveMinutes != null || edit?.miles != null,
     parts,
     amountCents: amountEdited ? (edit!.amountCents as number) : computed,
     amountEdited,
