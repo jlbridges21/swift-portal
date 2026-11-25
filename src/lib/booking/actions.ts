@@ -8,6 +8,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins, notifyProjectClients, notifyTeamMember } from "@/lib/notifications";
 import { setProjectStatus } from "@/lib/status-automation";
 import { syncShootToGoogleSafe } from "@/lib/google-calendar";
+import { syncShootToOutlookSafe } from "@/lib/outlook-calendar";
 import { formatZoned } from "@/lib/booking/time";
 import { zonedParts } from "@/lib/booking/time";
 import { VIOLATION_COPY, type SlotViolation } from "@/lib/booking/engine";
@@ -248,6 +249,7 @@ async function afterBooked(
     await setSchedulingStatus(ctx, facts.projectId, "scheduled", args.startMs);
     const newlyAdded = await ensureProjectStaff(ctx, facts.projectId, args.userId, args.actor.userId);
     await syncShootToGoogleSafe(ctx.businessId, args.proposalId, "upsert");
+    await syncShootToOutlookSafe(ctx.businessId, args.proposalId, "upsert");
     // Someone just put on the project hears it once, as an assignment, not also as a schedule change.
     if (newlyAdded) await notifyAssignee(ctx, facts, args.userId, args.actor.userId, args.startMs);
 
@@ -333,6 +335,7 @@ export async function cancelAppointment(
   try {
     await setSchedulingStatus(ctx, facts.projectId, "cancelled");
     await syncShootToGoogleSafe(ctx.businessId, appt.id, "delete");
+    await syncShootToOutlookSafe(ctx.businessId, appt.id, "delete");
     const when = whenLabel(ctx, appt.start);
     const byClient = input.actor.kind === "client";
     await logProjectActivity("shoot_cancelled", `Shoot on ${when} cancelled${byClient ? " by the client" : ""}`, {
@@ -403,6 +406,7 @@ export async function reassignAppointment(
   try {
     await ensureProjectStaff(ctx, facts.projectId, input.userId, input.actor.userId);
     await syncShootToGoogleSafe(ctx.businessId, appt.id, "upsert");
+    await syncShootToOutlookSafe(ctx.businessId, appt.id, "upsert");
     await notifyAssignee(ctx, facts, input.userId, input.actor.userId, appt.start);
     await logProjectActivity(
       "shoot_reassigned",

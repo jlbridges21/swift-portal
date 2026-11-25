@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { GoogleCalendarSettingsCard } from "@/components/admin/google-calendar-settings-card";
+import { OutlookCalendarSettingsCard } from "@/components/admin/outlook-calendar-settings-card";
 import { SectionHeading, useSettingsTab } from "@/components/admin/settings-tabs/shared";
 
 export function IntegrationsTab() {
@@ -24,6 +25,7 @@ export function IntegrationsTab() {
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <GoogleCalendarSettingsCard />
+        <OutlookCalendarSettingsCard />
 
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
           <div className="flex items-start gap-3">

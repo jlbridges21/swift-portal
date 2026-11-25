@@ -22,6 +22,7 @@ import {
   type ViewerCalendarColorPrefs,
 } from "@/lib/google-calendar";
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
+import { retryOutlookAttentionSyncs } from "@/lib/outlook-calendar";
 import Link from "next/link";
 import { getBusinessOwnerUserId } from "@/lib/staff";
 import { loadTeam, resolveMember } from "@/lib/booking/team";
@@ -79,8 +80,22 @@ export default async function AdminCalendarPage() {
       } catch {
         // Best-effort background repair.
       }
+      try {
+        await retryOutlookAttentionSyncs(tenant.businessId);
+      } catch {
+        // Best-effort background repair (Outlook, v137).
+      }
     });
   }
+
+  // Outlook connection (v137) — only decides whether to offer "Connect Google Calendar".
+  const outlookConnectedPromise = owner
+    ? db
+        .from("outlook_calendar_connections")
+        .select("status")
+        .maybeSingle()
+        .then(({ data, error }) => !error && Boolean(data))
+    : Promise.resolve(false);
 
   // Independent lookups in one parallel batch (all database reads; no Google calls).
   const [gcal, projectIds, settings, calendarColors] = await Promise.all([
@@ -105,6 +120,7 @@ export default async function AdminCalendarPage() {
     gcalError = gcal.last_error;
   }
   const googleActive = owner && gcalStatus === "active";
+  const outlookConnected = await outlookConnectedPromise;
 
   const businessTimeZone = resolveBusinessTimeZone(settings.workflow.businessDefaults.timezone).timeZone;
   // Google window: this month plus a week either side (covers the month grid, the current
@@ -253,7 +269,7 @@ export default async function AdminCalendarPage() {
       <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <main className="app-page app-page-wide mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(var(--app-height)-4rem)] lg:overflow-hidden lg:px-6">
         <PageHeader title="Shoot Calendar" className="mb-3">
-          {owner && gcalStatus !== "active" ? (
+          {owner && (gcalStatus === "needs_reconnect" || (gcalStatus === "disconnected" && !outlookConnected)) ? (
             <Link href="/admin/settings#settings-integrations">
               <Button variant="outline" size="sm">
                 {gcalStatus === "needs_reconnect" ? "Reconnect Google Calendar" : "Connect Google Calendar"}

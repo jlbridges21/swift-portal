@@ -8,6 +8,7 @@ import { createTenantServiceClient, type TenantServiceClient } from "@/lib/supab
 import { getAppSettings, type AppSettings } from "@/lib/app-settings";
 import { getGoogleCalendarAccess, getMemberGoogleAccess, listMemberConnections, resolveBusinessTimeZone } from "@/lib/google-calendar";
 import { listGoogleEvents } from "@/lib/google-calendar-pull";
+import { loadOutlookBusy } from "@/lib/outlook-calendar";
 import { timeOffToBusy } from "@/lib/staff-account-shared";
 import { loadProjectServiceLinks } from "@/lib/project-services";
 import {
@@ -480,10 +481,15 @@ async function prepare(
     ctx.schemaReady ? loadActiveHolds(ctx, fromMs, toMs) : Promise.resolve([]),
   ]);
   const calendarIds = [...new Set(filtered.flatMap((m) => m.blockCalendarIds))];
+  // Outlook "block my availability" calendars (business connection, v137) block the owner.
+  const outlookBusyPromise = filtered.some((m) => m.role === "owner")
+    ? loadOutlookBusy(ctx.businessId, fromMs - DAY, toMs + DAY)
+    : Promise.resolve(null);
   const [busy, memberBusy] = await Promise.all([
     loadGoogleBusy(ctx, calendarIds, fromMs - DAY, toMs + DAY),
     loadMemberBusy(ctx, filtered.map((m) => m.userId), fromMs - DAY, toMs + DAY),
   ]);
+  const outlookBusy = await outlookBusyPromise;
 
   const travel = new TravelTable(ctx.db);
   const property = facts.propertyAddress;
@@ -519,6 +525,7 @@ async function prepare(
       .map((h) => ({ start: Date.parse(h.block_start_at as string), end: Date.parse(h.block_end_at as string), label: "Held", kind: "hold" as const }));
     const own = memberBusy.get(member.userId);
     const googleBusy = [...member.blockCalendarIds.flatMap((id) => busy.byCalendar.get(id) ?? []), ...(own?.intervals ?? [])];
+    const outlook = member.role === "owner" ? outlookBusy : null;
     // Vacations / sick days from their own Settings (v134).
     const timeOffBusy = timeOffToBusy(member.profile.timeOff, ctx.timeZone, fromMs - DAY, toMs + DAY);
     engineStaff.push({
@@ -538,11 +545,12 @@ async function prepare(
           address: a.address,
         })
       ),
-      busy: [...googleBusy, ...timeOffBusy, ...holdBusy],
+      busy: [...googleBusy, ...(outlook?.intervals ?? []), ...timeOffBusy, ...holdBusy],
       weights: member.weights,
       fitScore: fit.score,
       // Fail closed: if someone's calendar can't be read, they aren't offered.
-      calendarUnavailable: member.blockCalendarIds.some((id) => busy.failed.has(id)) || Boolean(own?.failed),
+      calendarUnavailable:
+        member.blockCalendarIds.some((id) => busy.failed.has(id)) || Boolean(own?.failed) || Boolean(outlook?.active && outlook.failed),
     });
   }
 

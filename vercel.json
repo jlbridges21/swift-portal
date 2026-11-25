@@ -23,6 +23,10 @@
       "schedule": "15 16 * * *"
     },
     {
+      "path": "/api/cron/outlook-calendar",
+      "schedule": "20 16 * * *"
+    },
+    {
       "path": "/api/cron/staff-shoot-reminders",
       "schedule": "5 * * * *"
     },
