@@ -115,7 +115,11 @@ console.log("Static wiring");
     .slice(client.indexOf("function useStreamed"), client.indexOf("/** The Google fetch window"))
     .replace(/\/\/.*$/gm, "");
   assert(/source\.then\(\s*\(value\)[\s\S]*,\s*\(\) =>/.test(streamed) && !/\.catch\(|\.finally\(/.test(streamed), "streamed thenables use then(ok, err) — never .catch()/.finally()");
-  assert(/canDrag: \(item\) => item\.kind === "shoot" && canReschedule/.test(client), "Google events are never draggable");
+  assert(
+    /canDrag: \(item\) =>\s*item\.kind === "shoot" \? canReschedule : canEditEvent\(item\.event\)/.test(client) &&
+      /if \(!isSpEvent\(event\)\) return Boolean\(isOwner && event\.editable\)/.test(client),
+    "Google/Outlook events drag only for the owner, and only when the account can change them"
+  );
   assert(/saveShootTime/.test(client) && /saveShootTime/.test(projects), "both calendars save through the same shared mutation");
   assert(/action: "update_date"/.test(grid) && !/action: "update_date"/.test(client + projects), "the PATCH body lives in one place");
   assert(/<WeekTimeGrid/.test(client) && /<WeekTimeGrid/.test(projects) && !/function WeekGrid/.test(projects), "both Week views render the shared WeekTimeGrid");

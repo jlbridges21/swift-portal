@@ -56,6 +56,7 @@ import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/cal
 import { EventEditor, type EventDraftPreview, type EventEditorTarget } from "@/components/admin/calendar/event-editor";
 import type { CalendarEventRow } from "@/lib/calendar-events";
 import { ExternalEventDetailsBody } from "@/components/admin/calendar/external-event-details";
+import { saveExternalEvent, type ExternalEventChange } from "@/components/admin/calendar/external-event-editor";
 import { CalendarConnectionsButton } from "@/components/admin/booking/calendar-connections";
 import {
   RescheduleConfirmModal,
@@ -91,7 +92,7 @@ import {
   pendingEventBorder,
   pendingEventChipPaint,
 } from "@/lib/brand-color";
-import { zonedDayKey } from "@/lib/google-calendar-pull";
+import { toExternalEvent, zonedDayKey } from "@/lib/google-calendar-pull";
 import { MobileShootCalendar, type CalendarCreateProject, type CalendarService } from "@/components/admin/shoot-calendar-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -225,6 +226,30 @@ function calendarEventToExternal(row: CalendarEventRow, timeZone: string, color:
 
 function externalKey(event: ExternalCalendarEvent) {
   return `${event.calendarId}:${event.id}`;
+}
+
+/** The same Google/Outlook event at a new time (day keys + label recomputed), before the provider is re-read. */
+function retimeExternal(
+  event: ExternalCalendarEvent,
+  start: string,
+  end: string,
+  allDay: boolean,
+  timeZone: string
+): ExternalCalendarEvent {
+  const shaped = toExternalEvent(
+    {
+      id: event.id,
+      summary: event.title,
+      htmlLink: event.htmlLink ?? undefined,
+      start: allDay ? { date: start } : { dateTime: start },
+      end: allDay ? { date: end } : { dateTime: end },
+    },
+    event.calendarId,
+    event.calendarSummary,
+    timeZone,
+    event.calendarColor
+  );
+  return shaped ? { ...shaped, title: event.title, editable: event.editable, recurring: event.recurring } : event;
 }
 
 /** Subscribe to a streamed server promise; re-subscribes when a refresh delivers a new one. */
@@ -1587,7 +1612,9 @@ export function ShootCalendar({
       const length = Date.parse(item.event.end || item.event.start) - Date.parse(item.event.start);
       const startIso = zonedTimeToIso(toDay, toMin, businessTimeZone);
       if (startIso === new Date(item.event.start).toISOString()) return;
-      void patchCalendarEvent(item.event, startIso, new Date(Date.parse(startIso) + length).toISOString());
+      const endIso = new Date(Date.parse(startIso) + length).toISOString();
+      if (isSpEvent(item.event)) void patchCalendarEvent(item.event, startIso, endIso);
+      else void retimeProviderEvent(item.event, startIso, endIso, "moved");
     },
     suppressClick,
   };
@@ -1612,11 +1639,67 @@ export function ShootCalendar({
   }
 
   const canEditEvent = (event: ExternalCalendarEvent) => {
-    if (!isSpEvent(event)) return false;
+    // Google/Outlook: the owner, on events the connected account may change.
+    if (!isSpEvent(event)) return Boolean(isOwner && event.editable);
     if (isOwner) return true;
     const row = calEvents.find((r) => `${SP_EVENT_PREFIX}${r.id}` === event.id);
     return Boolean(row && viewerUserId && row.assigned_user_id === viewerUserId);
   };
+
+  /** Replace one Google/Outlook event in whichever list it came from. */
+  function replaceProviderEvent(event: ExternalCalendarEvent, next: ExternalCalendarEvent | null) {
+    const key = externalKey(event);
+    const apply = (list: ExternalCalendarEvent[]) =>
+      next ? list.map((e) => (externalKey(e) === key ? next : e)) : list.filter((e) => externalKey(e) !== key);
+    if (externalProvider(event.calendarId) === "Outlook") setOutlookEvents(apply);
+    else setExternalEvents(apply);
+  }
+
+  /** Re-read the provider after a change (the series, guests' view, ids can all change). */
+  function refreshProvider(event: ExternalCalendarEvent) {
+    if (externalProvider(event.calendarId) === "Outlook") setOutlookRetry((n) => n + 1);
+    else setGoogleRetry((n) => n + 1);
+  }
+
+  /**
+   * Drag-move / resize a Google or Outlook event: shown at once, saved to the provider (this
+   * occurrence only for a repeating event; guests are emailed like Google Calendar's "Send").
+   */
+  async function retimeProviderEvent(
+    event: ExternalCalendarEvent,
+    startIso: string,
+    endIso: string,
+    verb: "moved" | "resized"
+  ): Promise<boolean> {
+    const provider = externalProvider(event.calendarId);
+    replaceProviderEvent(event, retimeExternal(event, startIso, endIso, false, businessTimeZone));
+    try {
+      await saveExternalEvent(event, { start: startIso, end: endIso, allDay: false, scope: "this", notify: true });
+      toast.success(
+        `${verb === "moved" ? "Moved" : "Updated"} in ${provider} Calendar${event.recurring ? " (this occurrence only)" : ""}.`
+      );
+      refreshProvider(event);
+      return true;
+    } catch (err) {
+      replaceProviderEvent(retimeExternal(event, startIso, endIso, false, businessTimeZone), event);
+      toast.error(err instanceof Error ? err.message : `Couldn't change the event in ${provider} Calendar.`);
+      return false;
+    }
+  }
+
+  /** The event pop-up saved or deleted a Google/Outlook event. */
+  function onProviderEventChanged(event: ExternalCalendarEvent, change: ExternalEventChange) {
+    if (change.kind === "deleted") {
+      replaceProviderEvent(event, null);
+      setOpenedExternal(null);
+    } else {
+      let next = change.title !== undefined ? { ...event, title: change.title || "(No title)" } : event;
+      if (change.start && change.end) next = retimeExternal(next, change.start, change.end, Boolean(change.allDay), businessTimeZone);
+      replaceProviderEvent(event, next);
+      setOpenedExternal(next);
+    }
+    refreshProvider(event);
+  }
 
   /** Move/resize a calendar event immediately (no client is notified), like Google Calendar. */
   async function patchCalendarEvent(event: ExternalCalendarEvent, startIso: string, endIso: string): Promise<boolean> {
@@ -1676,8 +1759,14 @@ export function ShootCalendar({
       setPendingResize({ item, title: `${shoot.client_name} - ${shoot.project_name}`, startIso: shoot.proposed_at, fromEndIso: fromEnd, toEndIso: endIso });
       return;
     }
-    const id = item.event.id.slice(SP_EVENT_PREFIX.length);
     const fromEnd = item.event.end || item.event.start;
+    if (!isSpEvent(item.event)) {
+      // Show the new length while the dialog asks; the original event comes back on Cancel.
+      replaceProviderEvent(item.event, retimeExternal(item.event, item.event.start, endIso, false, businessTimeZone));
+      setPendingResize({ item, title: item.event.title, startIso: item.event.start, fromEndIso: fromEnd, toEndIso: endIso });
+      return;
+    }
+    const id = item.event.id.slice(SP_EVENT_PREFIX.length);
     setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: endIso } : r)));
     setPendingResize({ item, title: item.event.title, startIso: item.event.start, fromEndIso: fromEnd, toEndIso: endIso });
   }
@@ -1691,6 +1780,8 @@ export function ShootCalendar({
         delete next[item.shoot.id];
         return next;
       });
+    } else if (!isSpEvent(item.event)) {
+      replaceProviderEvent(item.event, item.event);
     } else {
       const id = item.event.id.slice(SP_EVENT_PREFIX.length);
       setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: fromEndIso } : r)));
@@ -1704,6 +1795,7 @@ export function ShootCalendar({
     setResizeSaving(true);
     try {
       if (item.kind === "shoot") await resizeShoot(item.shoot, toEndIso);
+      else if (!isSpEvent(item.event)) await retimeProviderEvent(item.event, item.event.start, toEndIso, "resized");
       else if (!(await patchCalendarEvent(item.event, item.event.start, toEndIso))) {
         const id = item.event.id.slice(SP_EVENT_PREFIX.length);
         setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: pendingResize.fromEndIso } : r)));
@@ -2481,6 +2573,8 @@ export function ShootCalendar({
             key={`${openedExternal.calendarId}|${openedExternal.id}`}
             event={openedExternal}
             provider={externalProvider(openedExternal.calendarId) === "Outlook" ? "Outlook" : "Google"}
+            timeZone={businessTimeZone}
+            onChanged={isOwner ? (change) => onProviderEventChanged(openedExternal, change) : undefined}
           />
         ) : null}
       </Modal>

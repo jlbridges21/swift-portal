@@ -11,6 +11,7 @@ import {
   Lock,
   MapPin,
   Paperclip,
+  Pencil,
   Phone,
   Repeat,
   Users,
@@ -20,6 +21,7 @@ import {
 import { toast } from "sonner";
 import type { ExternalCalendarEvent } from "@/lib/google-calendar-pull";
 import type { ExternalEventDetails, ExternalEventPerson } from "@/lib/external-event-details";
+import { ExternalEventEditor, type ExternalEventChange } from "@/components/admin/calendar/external-event-editor";
 
 type Provider = "Google" | "Outlook";
 
@@ -138,12 +140,18 @@ function mapsUrl(location: string): string | null {
 export function ExternalEventDetailsBody({
   event,
   provider,
+  timeZone,
+  onChanged,
 }: {
   event: ExternalCalendarEvent;
   provider: Provider;
+  timeZone: string;
+  /** Saved or deleted in Google/Outlook: the calendar updates and re-reads the provider. */
+  onChanged?: (change: ExternalEventChange) => void;
 }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -165,11 +173,40 @@ export function ExternalEventDetailsBody({
   const details = state.status === "ready" ? state.details : null;
   const location = details?.location ?? null;
   const locationLink = location ? mapsUrl(location) : null;
+  const canEdit = Boolean(details?.edit.canEdit && onChanged);
+
+  if (editing && details) {
+    return (
+      <ExternalEventEditor
+        event={event}
+        details={details}
+        provider={provider}
+        timeZone={timeZone}
+        onCancel={() => setEditing(false)}
+        onDone={(change) => {
+          setEditing(false);
+          if (change.kind === "updated") setAttempt((n) => n + 1);
+          onChanged?.(change);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4 pb-1">
       <div className="space-y-1">
-        <p className="text-base font-semibold text-heading">{event.title}</p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="min-w-0 text-base font-semibold text-heading">{event.title}</p>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium text-heading hover:bg-subtle"
+            >
+              <Pencil className="h-4 w-4" aria-hidden /> Edit
+            </button>
+          ) : null}
+        </div>
         <p className="text-sm text-indigo-800">
           {event.allDay ? "All day" : event.timeLabel}
           {details?.recurring ? (
@@ -312,7 +349,13 @@ export function ExternalEventDetailsBody({
             Open in {provider} Calendar <ExternalLink className="h-4 w-4" />
           </a>
         ) : null}
-        <p className="text-xs text-muted">Read-only here. Edit it in {provider} Calendar.</p>
+        <p className="text-xs text-muted">
+          {canEdit
+            ? `Changes you make here save to ${provider} Calendar.`
+            : details
+              ? `You can't change this event (it's an invitation or on a read-only calendar).`
+              : null}
+        </p>
       </div>
     </div>
   );

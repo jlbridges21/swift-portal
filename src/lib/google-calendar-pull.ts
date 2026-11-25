@@ -22,6 +22,10 @@ export type ExternalCalendarEvent = {
   timeLabel: string;
   /** Google calendarList backgroundColor. Display only; not stored. */
   calendarColor?: string | null;
+  /** The connected account can change this event (organizer, or guests may modify; writable calendar). */
+  editable?: boolean;
+  /** One occurrence of a repeating event. */
+  recurring?: boolean;
 };
 
 type GoogleEvent = {
@@ -35,7 +39,26 @@ type GoogleEvent = {
   end?: { date?: string; dateTime?: string };
   attendees?: { self?: boolean; responseStatus?: string }[];
   extendedProperties?: { private?: Record<string, string> };
+  organizer?: { email?: string; self?: boolean };
+  guestsCanModify?: boolean;
+  eventType?: string;
+  locked?: boolean;
 };
+
+/**
+ * Whether the account may change this event (before the calendar's own access role is applied).
+ * Organizer (or the calendar itself is the organizer), or the organizer let guests modify.
+ * Birthdays and Gmail-generated events can't be changed through the API.
+ */
+export function googleEventEditable(event: GoogleEvent, calendarId: string): boolean {
+  if (event.locked) return false;
+  if (event.eventType === "birthday" || event.eventType === "fromGmail") return false;
+  const organizer = event.organizer;
+  if (!organizer) return true;
+  if (organizer.self) return true;
+  if (organizer.email && organizer.email === calendarId) return true;
+  return Boolean(event.guestsCanModify);
+}
 
 const MAX_PAGES = 8;
 const MAX_EVENTS = 500;
@@ -171,6 +194,8 @@ export function toExternalEvent(
       dayKeys,
       timeLabel: "All day",
       calendarColor: calendarColor ?? null,
+      editable: googleEventEditable(event, calendarId),
+      recurring: Boolean(event.recurringEventId),
     };
   }
   const start = event.start?.dateTime as string;
@@ -196,6 +221,8 @@ export function toExternalEvent(
     dayKeys: datesInclusive(startKey, endKey),
     timeLabel,
     calendarColor: calendarColor ?? null,
+    editable: googleEventEditable(event, calendarId),
+    recurring: Boolean(event.recurringEventId),
   };
 }
 
