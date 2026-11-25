@@ -88,7 +88,8 @@ export default async function AdminCalendarPage() {
     });
   }
 
-  // Outlook connection (v137) — only decides whether to offer "Connect Google Calendar".
+  // Outlook connection (v137): decides whether to offer "Connect Google Calendar" and whether
+  // the owner sees Outlook calendars on the grid.
   const outlookConnectedPromise = owner
     ? db
         .from("outlook_calendar_connections")
@@ -291,6 +292,7 @@ export default async function AdminCalendarPage() {
           googleSource={googleSource}
           createProjectsSource={createProjectsSource}
           canLoadExternal={googleActive}
+          canLoadOutlook={owner && outlookConnected}
           canChooseColors={owner}
           calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}
