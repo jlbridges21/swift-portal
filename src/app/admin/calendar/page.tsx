@@ -226,7 +226,13 @@ export default async function AdminCalendarPage() {
 
   const createProjectsSource: Promise<CalendarCreateProject[]> = canCreateShoot
     ? (async () => {
-        let projectQuery = db.from("projects").select("id, project_name").order("project_name").limit(100);
+        // Deleted projects can't be booked (the booking API refuses them), so don't offer them.
+        let projectQuery = db
+          .from("projects")
+          .select("id, project_name")
+          .is("deleted_at", null)
+          .order("project_name")
+          .limit(100);
         if (projectIds !== "all") {
           projectQuery = projectQuery.in("id", projectIds.length === 0 ? NO_MATCH : projectIds);
         }
