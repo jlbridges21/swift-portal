@@ -53,7 +53,7 @@ import { Switch } from "@/components/ui/switch";
 import { PersonAvatar, initialsOf } from "@/components/admin/booking/booking-ui";
 import { AppointmentModal } from "@/components/admin/booking/appointment-modal";
 import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/calendar-extras";
-import { MyGoogleCalendarButton } from "@/components/admin/booking/my-google-calendar";
+import { CalendarConnectionsButton } from "@/components/admin/booking/calendar-connections";
 import {
   RescheduleConfirmModal,
   TIMED_RESCHEDULE_NOTE,
@@ -1668,7 +1668,7 @@ export function ShootCalendar({
           </div>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
             <div className="flex flex-wrap items-center gap-2">
-              <MyGoogleCalendarButton className="min-h-11" />
+              <CalendarConnectionsButton className="min-h-11" />
               {canCreateShoot ? (
                 <Button type="button" variant="accent" className="min-h-11" onClick={() => setBookOpen(true)}>
                   <Plus className="h-4 w-4" /> Book shoot

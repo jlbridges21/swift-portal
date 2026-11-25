@@ -27,7 +27,7 @@ type MyCalendarState = {
   connectUrl: string;
 };
 
-function GoogleMark({ className }: { className?: string }) {
+export function GoogleMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} aria-hidden>
       <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
@@ -38,7 +38,7 @@ function GoogleMark({ className }: { className?: string }) {
   );
 }
 
-function connectHref(base: string) {
+export function googleConnectHref(base: string) {
   const here = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/admin/calendar";
   const clean = here.replace(/[?&]mycal=[^&]*/, "").replace(/\?$/, "");
   return `${base}&return=${encodeURIComponent(clean || "/admin/calendar")}`;
@@ -126,7 +126,7 @@ export function MyGoogleCalendarPanel({ onChanged }: { onChanged?: () => void })
           Connect your own Google account so your personal appointments block your availability, and your confirmed shoots land on
           your calendar. Nobody else at the business sees your event details, only that you&apos;re busy.
         </p>
-        <a href={connectHref(state.connectUrl)} className="inline-flex">
+        <a href={googleConnectHref(state.connectUrl)} className="inline-flex">
           <Button variant="accent" type="button">
             <GoogleMark className="h-4 w-4" /> Connect my Google Calendar
           </Button>
@@ -143,7 +143,7 @@ export function MyGoogleCalendarPanel({ onChanged }: { onChanged?: () => void })
           bookings (so nothing gets double-booked).
         </Notice>
         <div className="flex flex-wrap gap-2">
-          <a href={connectHref(state.connectUrl)}>
+          <a href={googleConnectHref(state.connectUrl)}>
             <Button variant="accent" type="button">
               <GoogleMark className="h-4 w-4" /> Reconnect
             </Button>

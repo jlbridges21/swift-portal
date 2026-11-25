@@ -22,7 +22,10 @@ export async function GET(request: Request) {
     NextResponse.redirect(
       resolveGoogleCalendarReturnUrl({ returnOrigin: state?.returnOrigin || portalOrigin, businessPortalOrigin: portalOrigin, path })
     );
-  const fail = (reason: string) => back(`/admin/settings?ocal=error&reason=${encodeURIComponent(reason)}#settings-integrations`);
+  // Connect started from the Shoot Calendar → land back there; otherwise Settings → Integrations.
+  const landing = (query: string) =>
+    state?.returnPath ? `${state.returnPath}?${query}` : `/admin/settings?${query}#settings-integrations`;
+  const fail = (reason: string) => back(landing(`ocal=error&reason=${encodeURIComponent(reason)}`));
 
   if (!state) return fail("invalid_state");
   const oauthError = url.searchParams.get("error");
@@ -41,5 +44,5 @@ export async function GET(request: Request) {
     console.error("[outlook-calendar] connect failed", { businessId: state.businessId, error: err instanceof Error ? err.message.slice(0, 200) : "unknown" });
     return fail("exchange_failed");
   }
-  return back("/admin/settings?ocal=connected#settings-integrations");
+  return back(landing("ocal=connected"));
 }

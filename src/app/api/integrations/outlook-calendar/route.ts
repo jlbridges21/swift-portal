@@ -28,9 +28,10 @@ export async function GET() {
       lastError: null,
       attentionCount: 0,
       calendars: [],
+      canManage: false,
     });
   }
-  return NextResponse.json(status);
+  return NextResponse.json({ ...status, canManage: true });
 }
 
 export async function PATCH(request: Request) {
