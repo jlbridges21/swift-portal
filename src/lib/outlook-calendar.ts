@@ -1073,6 +1073,9 @@ export type OutlookDisplayWindow = {
   colors: Record<string, string>;
   events: ExternalCalendarEvent[];
   degraded: boolean;
+  /** Calendars whose events were fetched (hidden ones aren't), and the ones Microsoft refused. */
+  loadedCalendarIds: string[];
+  failedCalendarIds: string[];
 };
 
 async function readDisplayPrefs(
@@ -1107,6 +1110,8 @@ export async function loadOutlookDisplayWindow(
     colors: {},
     events: [],
     degraded: false,
+    loadedCalendarIds: [],
+    failedCalendarIds: [],
   };
   const access = await getOutlookAccess(businessId);
   if (!access.ok) {
@@ -1129,8 +1134,13 @@ export async function loadOutlookDisplayWindow(
 
   let degraded = false;
   const events: OutlookDisplayWindow["events"] = [];
+  // Only the calendars shown on the grid (a hidden one turned back on is fetched then).
+  const hiddenSet = new Set(hiddenRaw);
+  const visible = calendars.filter((c) => !hiddenSet.has(c.id));
+  const loadedCalendarIds: string[] = [];
+  const failedCalendarIds: string[] = [];
   await Promise.all(
-    calendars.map(async (cal) => {
+    visible.map(async (cal) => {
       try {
         const raw = await listOutlookDisplayEvents(access.token, cal.id, fromIso, toIso);
         for (const e of raw) {
@@ -1138,8 +1148,17 @@ export async function loadOutlookDisplayWindow(
           const shaped = toExternalEvent(outlookEventAsGoogleShape(e), prefixId(cal.id), cal.name, timeZone, cal.color);
           if (shaped) events.push({ ...shaped, id: prefixId(shaped.id) });
         }
-      } catch {
+        loadedCalendarIds.push(prefixId(cal.id));
+      } catch (err) {
         degraded = true;
+        failedCalendarIds.push(prefixId(cal.id));
+        // Microsoft's error code (no event data): which kind of calendar fails, and why.
+        console.error("[outlook-calendar] calendarView failed", {
+          businessId,
+          isDefault: cal.isDefault,
+          canEdit: cal.canEdit,
+          error: err instanceof Error ? err.message.slice(0, 200) : "unknown",
+        });
       }
     })
   );
@@ -1159,6 +1178,8 @@ export async function loadOutlookDisplayWindow(
     colors,
     events,
     degraded,
+    loadedCalendarIds,
+    failedCalendarIds,
   };
 }
 
