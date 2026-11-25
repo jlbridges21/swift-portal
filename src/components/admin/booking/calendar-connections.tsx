@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarCheck2, CalendarDays, Check, ChevronLeft, ChevronRight, Link2, Loader2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,30 @@ type GoogleSummary = {
   ready: boolean;
   connection: { email: string | null; status: "active" | "needs_reconnect" } | null;
   connectUrl: string;
+  /** Where Connect goes (owner: the business connection; staff: their own). */
+  connectHref?: string;
 };
+
+/** The owner's Google connection is the business one — the same as Settings → Integrations. */
+const BUSINESS_GOOGLE_CONNECT = "/api/integrations/google-calendar/start?return=%2Fadmin%2Fcalendar";
+
+type BusinessGoogleStatus = {
+  configured: boolean;
+  connected: boolean;
+  status: "disconnected" | "active" | "needs_reconnect";
+  email: string | null;
+  calendarId: string | null;
+  calendarSummary: string | null;
+  lastError: string | null;
+  attentionCount: number;
+  calendars: { id: string; summary: string; primary: boolean }[];
+};
+
+async function fetchBusinessGoogle(): Promise<BusinessGoogleStatus | null> {
+  const res = await fetch("/api/integrations/google-calendar", { credentials: "include", cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as BusinessGoogleStatus;
+}
 
 type View = "list" | "google" | "outlook";
 
@@ -46,10 +70,257 @@ async function fetchOutlook(): Promise<OutlookState | null> {
   return (await res.json()) as OutlookState;
 }
 
-async function fetchGoogle(): Promise<GoogleSummary | null> {
+async function fetchGoogle(isOwner: boolean): Promise<GoogleSummary | null> {
+  if (isOwner) {
+    const b = await fetchBusinessGoogle();
+    if (!b) return null;
+    return {
+      configured: b.configured,
+      ready: true,
+      connection: b.connected && b.status !== "disconnected" ? { email: b.email, status: b.status } : null,
+      connectUrl: BUSINESS_GOOGLE_CONNECT,
+      connectHref: BUSINESS_GOOGLE_CONNECT,
+    };
+  }
   const res = await fetch("/api/booking/my-calendar", { credentials: "include", cache: "no-store" });
   if (!res.ok) return null;
-  return (await res.json()) as GoogleSummary;
+  const data = (await res.json()) as GoogleSummary;
+  return { ...data, connectHref: googleConnectHref(data.connectUrl) };
+}
+
+/**
+ * The owner's Google Calendar in the modal: the business connection, the same one Settings →
+ * Integrations shows. Shoots go to "Calendar for your confirmed shoots"; "Calendars that block
+ * your availability" is Settings → Instant Booking's block list. Connect/disconnect here and it
+ * shows there too.
+ */
+export function BusinessGoogleCalendarPanel({ onChanged }: { onChanged?: () => void }) {
+  const [state, setState] = useState<BusinessGoogleStatus | null>(null);
+  const [savedBlocks, setSavedBlocks] = useState<string[]>([]);
+  const [blocks, setBlocks] = useState<string[]>([]);
+  const [destination, setDestination] = useState("");
+  const [personal, setPersonal] = useState<{ email: string | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const load = useCallback(async () => {
+    const [status, availability, mine] = await Promise.all([
+      fetchBusinessGoogle().catch(() => null),
+      fetch("/api/integrations/google-calendar/availability", { credentials: "include", cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ blockCalendarIds: string[] }>) : null))
+        .catch(() => null),
+      fetch("/api/booking/my-calendar", { credentials: "include", cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ connection: { email: string | null } | null }>) : null))
+        .catch(() => null),
+    ]);
+    if (!status) {
+      setError("Couldn't load your Google connection.");
+      return;
+    }
+    setState(status);
+    setDestination(status.calendarId || "");
+    const ids = availability?.blockCalendarIds ?? [];
+    setSavedBlocks(ids);
+    setBlocks(ids);
+    setPersonal(mine?.connection ? { email: mine.connection.email } : null);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save() {
+    if (!state) return;
+    setSaving(true);
+    let failed: string | null = null;
+    if (destination && destination !== (state.calendarId || "")) {
+      const res = await fetch("/api/integrations/google-calendar", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarId: destination }),
+      });
+      if (!res.ok) failed = ((await res.json().catch(() => ({}))) as { error?: string }).error || "Couldn't save.";
+    }
+    if (!failed && JSON.stringify([...blocks].sort()) !== JSON.stringify([...savedBlocks].sort())) {
+      const res = await fetch("/api/integrations/google-calendar/availability", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blockCalendarIds: blocks }),
+      });
+      if (!res.ok) failed = ((await res.json().catch(() => ({}))) as { error?: string }).error || "Couldn't save.";
+    }
+    setSaving(false);
+    if (failed) {
+      toast.error(failed);
+      return;
+    }
+    toast.success("Google calendar choices saved.");
+    await load();
+    onChanged?.();
+  }
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect Google Calendar? Shoots already on your Google calendar stay there.")) return;
+    setDisconnecting(true);
+    const res = await fetch("/api/integrations/google-calendar", { method: "DELETE", credentials: "include" });
+    setDisconnecting(false);
+    if (!res.ok) {
+      toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error || "Couldn't disconnect.");
+      return;
+    }
+    toast.success("Google Calendar disconnected.");
+    await load();
+    onChanged?.();
+  }
+
+  async function removePersonal() {
+    const res = await fetch("/api/booking/my-calendar", { method: "DELETE", credentials: "include" });
+    if (!res.ok) {
+      toast.error("Couldn't remove it. Try again.");
+      return;
+    }
+    toast.success("Removed the extra Google connection.");
+    await load();
+    onChanged?.();
+  }
+
+  if (error) return <Notice tone="warn">{error}</Notice>;
+  if (!state) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading your Google calendar…
+      </p>
+    );
+  }
+  if (!state.configured) return <Notice tone="warn">Google Calendar isn&apos;t configured on this server.</Notice>;
+
+  const personalNote =
+    personal && state.connected ? (
+      <Notice>
+        You also connected Google separately{personal.email ? ` as ${personal.email}` : ""} for your own availability. You only need
+        this one now.{" "}
+        <button type="button" className="font-semibold underline" onClick={() => void removePersonal()}>
+          Remove the extra connection
+        </button>
+      </Notice>
+    ) : null;
+
+  if (!state.connected || state.status === "disconnected") {
+    return (
+      <div className="space-y-3 text-sm">
+        <p className="text-muted">
+          Connect Google Calendar. Shoots are added to the calendar you pick, and busy times on the calendars you check keep clients
+          from booking you then. This is the same connection as Settings → Integrations.
+        </p>
+        <a href={BUSINESS_GOOGLE_CONNECT} className="inline-flex">
+          <Button variant="accent" type="button">
+            <GoogleMark className="h-4 w-4" /> Connect Google Calendar
+          </Button>
+        </a>
+      </div>
+    );
+  }
+
+  if (state.status === "needs_reconnect") {
+    return (
+      <div className="space-y-3 text-sm">
+        <Notice tone="warn">
+          Google stopped accepting the connection for {state.email ?? "your account"}. Until you reconnect, shoots don&apos;t sync to
+          Google and you won&apos;t be offered for bookings.
+        </Notice>
+        <div className="flex flex-wrap gap-2">
+          <a href={BUSINESS_GOOGLE_CONNECT}>
+            <Button variant="accent" type="button">
+              <GoogleMark className="h-4 w-4" /> Reconnect
+            </Button>
+          </a>
+          <Button variant="outline" type="button" onClick={disconnect} disabled={disconnecting}>
+            <Unplug className="h-4 w-4" /> Disconnect
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const dirty =
+    (destination && destination !== (state.calendarId || "")) ||
+    JSON.stringify([...blocks].sort()) !== JSON.stringify([...savedBlocks].sort());
+  // Saved block calendars that aren't in the writable list (e.g. Holidays) still show, so they can be unticked.
+  const listed = [
+    ...state.calendars,
+    ...savedBlocks.filter((id) => !state.calendars.some((c) => c.id === id)).map((id) => ({ id, summary: id, primary: false })),
+  ];
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900 surface-dark:border-emerald-900 surface-dark:bg-emerald-950/40 surface-dark:text-emerald-200">
+        <span className="flex min-w-0 items-center gap-2 font-medium">
+          <Check className="h-4 w-4 shrink-0" /> <span className="truncate">Connected as {state.email ?? "your Google account"}</span>
+        </span>
+        <Button variant="ghost" size="sm" type="button" onClick={disconnect} disabled={disconnecting}>
+          {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />} Disconnect
+        </Button>
+      </div>
+
+      {personalNote}
+
+      {state.attentionCount ? (
+        <Notice tone="warn">
+          {state.attentionCount} shoot{state.attentionCount === 1 ? "" : "s"} couldn&apos;t sync to Google and will be retried.
+        </Notice>
+      ) : null}
+
+      <div>
+        <p className="font-medium text-heading">Calendars that block your availability</p>
+        <p className="text-xs text-muted">Busy times on these calendars keep clients from booking you then. All-day events don&apos;t block.</p>
+        <div className="mt-2 space-y-1.5">
+          {listed.map((c) => {
+            const on = blocks.includes(c.id);
+            return (
+              <label
+                key={c.id}
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2",
+                  on ? "border-accent bg-accent-subtle/60" : "border-border"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-accent"
+                  checked={on}
+                  onChange={(e) => setBlocks((prev) => (e.target.checked ? [...prev, c.id] : prev.filter((x) => x !== c.id)))}
+                />
+                <span className="min-w-0 truncate">{c.summary}</span>
+                {c.primary ? <span className="text-xs text-muted">(primary)</span> : null}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className="font-medium text-heading">Calendar for your confirmed shoots</p>
+        <NativeSelect
+          ariaLabel="Calendar for your confirmed shoots"
+          className="mt-2"
+          value={destination}
+          onChange={setDestination}
+          options={state.calendars.map((c) => ({ value: c.id, label: `${c.summary}${c.primary ? " (primary)" : ""}` }))}
+        />
+        <p className="mt-1.5 text-xs text-muted">Proposed and confirmed shoots are added here, and removed if they&apos;re cancelled.</p>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="accent" type="button" disabled={!dirty || saving} onClick={save}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck2 className="h-4 w-4" />} Save
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** The business's Outlook calendar: which calendar gets shoots, which block availability, disconnect. */
@@ -290,7 +561,9 @@ function ProviderRow({
  * each with Connect, or (once connected) its settings. Reopens on the right view after the
  * provider redirects back (?mycal= for Google, ?ocal= for Outlook).
  */
-export function CalendarConnectionsButton({ className }: { className?: string }) {
+export function CalendarConnectionsButton({ className, isOwner = false }: { className?: string; isOwner?: boolean }) {
+  const router = useRouter();
+  const changed = useRef(false);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>("list");
   const [google, setGoogle] = useState<GoogleSummary | null>(null);
@@ -298,23 +571,30 @@ export function CalendarConnectionsButton({ className }: { className?: string })
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [g, o] = await Promise.all([fetchGoogle().catch(() => null), fetchOutlook().catch(() => null)]);
+    const [g, o] = await Promise.all([fetchGoogle(isOwner).catch(() => null), fetchOutlook().catch(() => null)]);
     setGoogle(g);
     setOutlook(o);
     setLoaded(true);
-  }, []);
+  }, [isOwner]);
+
+  // A connect/disconnect/save changes what the calendar page shows (sidebar, Google events).
+  const markChanged = useCallback(() => {
+    changed.current = true;
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     void refresh();
     const params = new URLSearchParams(window.location.search);
-    const mycal = params.get("mycal");
+    // ?mycal= a team member's own Google; ?gcal= the owner's (business) Google; ?ocal= Outlook.
+    const mycal = params.get("mycal") || params.get("gcal");
     const ocal = params.get("ocal");
     if (!mycal && !ocal) return;
     if (mycal === "connected") toast.success("Your Google Calendar is connected.");
     else if (mycal) toast.error("Google didn't finish connecting your calendar. Try again.");
     if (ocal === "connected") toast.success("Outlook Calendar connected. Check which calendars block your availability.");
     else if (ocal) toast.error(OUTLOOK_REASONS[params.get("reason") || ""] || "Outlook didn't finish connecting. Try again.");
-    for (const key of ["mycal", "ocal", "reason"]) params.delete(key);
+    for (const key of ["mycal", "gcal", "ocal", "reason"]) params.delete(key);
     const qs = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
     setView(ocal === "connected" ? "outlook" : mycal === "connected" ? "google" : "list");
@@ -335,6 +615,10 @@ export function CalendarConnectionsButton({ className }: { className?: string })
     setOpen(false);
     setView("list");
     void refresh();
+    if (changed.current) {
+      changed.current = false;
+      router.refresh();
+    }
   }
 
   const manage = (target: View, label = "Manage") => (
@@ -376,7 +660,7 @@ export function CalendarConnectionsButton({ className }: { className?: string })
         tone="muted"
         status="Not connected"
         action={
-          <a href={googleConnectHref(google.connectUrl)}>
+          <a href={google.connectHref || googleConnectHref(google.connectUrl)}>
             <Button variant="accent" size="sm" type="button" className="min-h-10">
               Connect
             </Button>
@@ -484,7 +768,15 @@ export function CalendarConnectionsButton({ className }: { className?: string })
             >
               <ChevronLeft className="h-4 w-4" /> All calendars
             </button>
-            {view === "google" ? <MyGoogleCalendarPanel onChanged={refresh} /> : <OutlookCalendarPanel onChanged={refresh} />}
+            {view === "google" ? (
+              isOwner ? (
+                <BusinessGoogleCalendarPanel onChanged={markChanged} />
+              ) : (
+                <MyGoogleCalendarPanel onChanged={markChanged} />
+              )
+            ) : (
+              <OutlookCalendarPanel onChanged={markChanged} />
+            )}
           </div>
         )}
       </Modal>

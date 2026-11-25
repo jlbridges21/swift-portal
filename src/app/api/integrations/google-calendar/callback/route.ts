@@ -23,7 +23,11 @@ export async function GET(request: Request) {
   const state = verifyOAuthState(url.searchParams.get("state") || "");
   const portalOrigin = state ? await getBusinessPortalOriginById(state.businessId) : "https://www.shootportal.app";
   // The setup wizard (Booking & calendar step) asks to come back to /onboarding.
-  const businessBack = state && state.kind !== "member" && state.returnPath?.startsWith("/onboarding") ? state.returnPath : null;
+  // The setup wizard and the Shoot Calendar's "Connect calendar" modal come back where they started.
+  const businessBack =
+    state && state.kind !== "member" && (state.returnPath?.startsWith("/onboarding") || state.returnPath === "/admin/calendar")
+      ? state.returnPath
+      : null;
   const fail = (reason: string) => {
     const dest = resolveGoogleCalendarReturnUrl({
       returnOrigin: state?.returnOrigin || portalOrigin,

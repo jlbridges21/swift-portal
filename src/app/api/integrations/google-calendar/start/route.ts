@@ -60,7 +60,8 @@ export async function GET(request: Request) {
     businessId: tenant.businessId,
     userId: profile.id,
     returnOrigin,
-    ...(back && /^\/onboarding(\?|$)/.test(back) ? { returnPath: back } : {}),
+    // Setup wizard, or the Shoot Calendar's "Connect calendar" modal.
+    ...(back && (/^\/onboarding(\?|$)/.test(back) || back === "/admin/calendar") ? { returnPath: back } : {}),
   });
   return NextResponse.redirect(googleAuthUrl(state));
 }
