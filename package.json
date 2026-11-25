@@ -15,6 +15,7 @@
     "test:settings-patch": "npx tsx scripts/verify-settings-patch-validation.ts",
     "test:portal-url": "npx tsx scripts/verify-portal-url.ts",
     "test:outlook-calendar": "npx tsx scripts/verify-outlook-calendar.ts",
+    "test:external-event-details": "npx tsx scripts/verify-external-event-details.ts",
     "test:client-access-link": "npx tsx scripts/verify-client-access-link.ts",
     "test:preview-auth": "npx tsx scripts/verify-preview-auth-redirect.ts",
     "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",

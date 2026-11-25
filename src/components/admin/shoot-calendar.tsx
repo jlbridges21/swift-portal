@@ -55,6 +55,7 @@ import { AppointmentModal } from "@/components/admin/booking/appointment-modal";
 import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/calendar-extras";
 import { EventEditor, type EventDraftPreview, type EventEditorTarget } from "@/components/admin/calendar/event-editor";
 import type { CalendarEventRow } from "@/lib/calendar-events";
+import { ExternalEventDetailsBody } from "@/components/admin/calendar/external-event-details";
 import { CalendarConnectionsButton } from "@/components/admin/booking/calendar-connections";
 import {
   RescheduleConfirmModal,
@@ -2476,28 +2477,11 @@ export function ShootCalendar({
         title={`${openedExternal ? externalProvider(openedExternal.calendarId) : "Google"} Calendar`}
       >
         {openedExternal ? (
-          <div className="space-y-4">
-            <p className="text-base font-semibold text-heading">{openedExternal.title}</p>
-            <p className="text-sm text-indigo-800">{openedExternal.allDay ? "All day" : openedExternal.timeLabel}</p>
-            <p className="text-sm text-muted">
-              {externalProvider(openedExternal.calendarId)} · {openedExternal.calendarSummary}
-            </p>
-            <p className="text-sm text-muted">This event is read-only in ShootPortal.</p>
-            {openedExternal.htmlLink ? (
-              <a
-                href={openedExternal.htmlLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-3 text-sm font-medium text-indigo-900"
-              >
-                Open in {externalProvider(openedExternal.calendarId)} Calendar <ExternalLink className="h-4 w-4" />
-              </a>
-            ) : (
-              <p className="text-sm text-muted">
-                {externalProvider(openedExternal.calendarId)} did not provide a link for this event.
-              </p>
-            )}
-          </div>
+          <ExternalEventDetailsBody
+            key={`${openedExternal.calendarId}|${openedExternal.id}`}
+            event={openedExternal}
+            provider={externalProvider(openedExternal.calendarId) === "Outlook" ? "Outlook" : "Google"}
+          />
         ) : null}
       </Modal>
     </div>
