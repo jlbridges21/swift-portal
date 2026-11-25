@@ -1643,7 +1643,7 @@ export function ShootCalendar({
               </label>
             </div>
 
-            {canLoadExternal ? (
+            {canLoadExternal && googleStatus !== "unavailable" && googleCalendars.length ? (
               <div>
                 <button
                   type="button"
