@@ -38,6 +38,7 @@ export function SchedulePanel({
   canOverride,
   onDone,
   submitLabel = "Schedule shoot",
+  calendarOverride = false,
 }: {
   projectId: string;
   timeZone: string;
@@ -48,6 +49,8 @@ export function SchedulePanel({
   canOverride: boolean;
   onDone: () => void;
   submitLabel?: string;
+  /** Shoot Calendar (owner/admin): any time books straight away, overriding availability. */
+  calendarOverride?: boolean;
 }) {
   const [day, setDay] = useState(
     () => zonedParts(initialStart ? Date.parse(initialStart) : Date.now() + 24 * 3600_000, timeZone).dayKey
@@ -108,6 +111,7 @@ export function SchedulePanel({
       start,
       userId: userId === "any" ? (slotUser ?? null) : userId,
       ...(overrideReason ? { overrideReason, confirmOverride: true } : {}),
+      ...(calendarOverride && !overrideReason ? { calendarOverride: true } : {}),
     });
     setBusy(false);
     if (res.ok) {

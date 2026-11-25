@@ -134,6 +134,16 @@ export type DragBindProps = ReturnType<ReturnType<typeof useEventDrag>["bind"]>;
 
 // ── Week ────────────────────────────────────────────────────────────────────
 
+/** Optional (Shoot Calendar): drag a block's bottom edge to change its length. */
+export type ResizeApi<E> = {
+  canResize: (e: E) => boolean;
+  /** New end, in minutes after midnight on the block's day (15-minute snap). */
+  commit: (e: E, endMin: number) => void;
+};
+
+/** Optional (Shoot Calendar): the placeholder block shown while a new event is being created. */
+export type DraftBlock = { dayKey: string; startMin: number; endMin: number; label: string };
+
 export type WeekBlockAppearance = {
   className?: string;
   style?: CSSProperties;
@@ -154,6 +164,9 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
   ghostLabel,
   allDayHint,
   className,
+  onCreateAt,
+  draft,
+  resize,
 }: {
   days: string[];
   today: string;
@@ -173,11 +186,74 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
   allDayHint?: string;
   /** Height of the scroll area (the grid scrolls inside it). */
   className?: string;
+  /** Click on an empty slot: create an event there (start snapped to the hour). */
+  onCreateAt?: (dayKey: string, startMin: number) => void;
+  draft?: DraftBlock | null;
+  resize?: ResizeApi<E>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const colRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [nowMin, setNowMin] = useState<number | null>(null);
   const [ghost, setGhost] = useState<{ dayKey: string; startMin: number } | null>(null);
+  // Bottom-edge resize in progress: which block and its new end (minutes on its day).
+  const [resizing, setResizing] = useState<{ key: string; endMin: number } | null>(null);
+  const resizeRef = useRef<{ key: string; event: E; dayIndex: number; endMin: number; pointerId: number } | null>(null);
+
+  function resizeHandle(event: E, dayIndex: number) {
+    if (!resize?.canResize(event)) return null;
+    const key = eventKey(event);
+    return (
+      <span
+        role="separator"
+        aria-label="Drag to change the length"
+        title="Drag to change the length"
+        className="absolute inset-x-0 bottom-0 z-[3] h-2 cursor-ns-resize"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          e.preventDefault();
+          resizeRef.current = { key, event, dayIndex, endMin: event.endMin, pointerId: e.pointerId };
+          setResizing({ key, endMin: event.endMin });
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* unsupported */
+          }
+          document.body.style.cursor = "ns-resize";
+        }}
+        onPointerMove={(e) => {
+          const r = resizeRef.current;
+          if (!r || r.pointerId !== e.pointerId) return;
+          const col = colRefs.current[r.dayIndex]?.getBoundingClientRect();
+          if (!col) return;
+          const raw = ((e.clientY - col.top) / HOUR_PX) * 60;
+          const snapped = Math.round(raw / 15) * 15;
+          const endMin = Math.min(24 * 60, Math.max(r.event.startMin + 15, snapped));
+          if (endMin === r.endMin) return;
+          r.endMin = endMin;
+          setResizing({ key: r.key, endMin });
+        }}
+        onPointerUp={(e) => {
+          const r = resizeRef.current;
+          if (!r || r.pointerId !== e.pointerId) return;
+          e.stopPropagation();
+          resizeRef.current = null;
+          setResizing(null);
+          document.body.style.cursor = "";
+          // The click that follows pointerup must not open the event.
+          drag.suppressClick.current = true;
+          window.setTimeout(() => (drag.suppressClick.current = false), 0);
+          if (r.endMin !== r.event.endMin) resize.commit(r.event, r.endMin);
+        }}
+        onPointerCancel={() => {
+          resizeRef.current = null;
+          setResizing(null);
+          document.body.style.cursor = "";
+        }}
+      />
+    );
+  }
   const ghostRef = useRef<{ dayKey: string; startMin: number } | null>(null);
 
   /** Day column + minutes under the pointer (null outside the seven day columns). */
@@ -319,6 +395,21 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
               }}
               data-week-day={d}
               className={cn("relative border-l border-border", d === today && "bg-accent-subtle/25")}
+              onClick={
+                onCreateAt
+                  ? (e) => {
+                      if ((e.target as HTMLElement).closest("button,[data-no-create]")) return;
+                      if (drag.suppressClick.current) {
+                        drag.suppressClick.current = false;
+                        return;
+                      }
+                      const r = e.currentTarget.getBoundingClientRect();
+                      const minutes = ((e.clientY - r.top) / HOUR_PX) * 60;
+                      // Like Google Calendar: the hour you clicked in (1:06 PM → 1:00 PM).
+                      onCreateAt(d, Math.min(23 * 60, Math.max(0, Math.floor(minutes / 60) * 60)));
+                    }
+                  : undefined
+              }
             >
               {Array.from({ length: 24 }, (_, h) => (
                 <div key={h} className="border-b border-border/60" style={{ height: HOUR_PX }} aria-hidden />
@@ -326,7 +417,8 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
               {timed[i].map(({ event, column, columns }) => {
                 const look = blockAppearance(event);
                 const top = (event.startMin / 60) * HOUR_PX;
-                const height = Math.max(22, ((event.endMin - event.startMin) / 60) * HOUR_PX - 2);
+                const liveEnd = resizing && resizing.key === eventKey(event) ? resizing.endMin : event.endMin;
+                const height = Math.max(22, ((liveEnd - event.startMin) / 60) * HOUR_PX - 2);
                 const width = 100 / columns;
                 const roomy = height >= 44;
                 const padBefore = Math.max(0, Math.min(event.padBeforeMin ?? 0, event.startMin));
@@ -354,6 +446,12 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
                     title={look.title}
                   >
                     {renderBlock(event, roomy)}
+                    {resizing && resizing.key === eventKey(event) ? (
+                      <span className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded bg-card/90 px-1 text-[10px] font-semibold text-accent">
+                        {formatTimeRange(zonedTimeToIso(d, event.startMin, timeZone), liveEnd - event.startMin, timeZone)}
+                      </span>
+                    ) : null}
+                    {resizeHandle(event, i)}
                   </button>
                   </Fragment>
                 );
@@ -367,6 +465,19 @@ export function WeekTimeGrid<E extends WeekGridEvent>({
                   <span className="block truncate font-semibold text-heading">{ghostLabel(dragging)}</span>
                   <span className="block truncate font-medium text-accent">
                     {formatTimeRange(zonedTimeToIso(d, ghost.startMin, timeZone), dragging.endMin - dragging.startMin, timeZone)}
+                  </span>
+                </div>
+              ) : null}
+              {draft && draft.dayKey === d ? (
+                <div
+                  data-no-create
+                  className="pointer-events-none absolute inset-x-0.5 z-[4] overflow-hidden rounded-md border-l-[3px] border-accent bg-accent px-1.5 py-0.5 text-[11px] leading-tight text-accent-foreground shadow-lg"
+                  style={{ top: (draft.startMin / 60) * HOUR_PX + 1, height: Math.max(22, ((draft.endMin - draft.startMin) / 60) * HOUR_PX - 2) }}
+                  aria-hidden
+                >
+                  <span className="block truncate font-semibold">{draft.label}</span>
+                  <span className="block truncate opacity-90">
+                    {formatTimeRange(zonedTimeToIso(d, draft.startMin, timeZone), draft.endMin - draft.startMin, timeZone)}
                   </span>
                 </div>
               ) : null}
@@ -476,12 +587,22 @@ export async function rescheduleErrorMessage(res: Response): Promise<string> {
  * The one scheduling mutation both calendars use for a timed shoot: PATCH /api/shoot-proposals
  * `update_date` (activity log, client notification and Google sync happen there, once).
  */
-export async function saveShootTime(proposalId: string, proposedAtIso: string): Promise<void> {
+export async function saveShootTime(
+  proposalId: string,
+  proposedAtIso: string,
+  opts: { endIso?: string | null; calendarOverride?: boolean } = {}
+): Promise<void> {
   const res = await fetch("/api/shoot-proposals", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ id: proposalId, action: "update_date", proposed_at: proposedAtIso }),
+    body: JSON.stringify({
+      id: proposalId,
+      action: "update_date",
+      proposed_at: proposedAtIso,
+      ...(opts.endIso ? { end_at: opts.endIso } : {}),
+      ...(opts.calendarOverride ? { calendar_override: true } : {}),
+    }),
   });
   if (!res.ok) throw new Error(await rescheduleErrorMessage(res));
 }

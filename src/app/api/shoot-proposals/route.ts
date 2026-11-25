@@ -47,12 +47,18 @@ async function acceptThroughEngine(
 }
 
 /** Null when this proposal isn't a booking-engine appointment (legacy flow continues). */
-async function moveEngineAppointment(businessId: string, proposalId: string, proposedAt: string, actorId: string) {
+async function moveEngineAppointment(
+  businessId: string,
+  proposalId: string,
+  proposedAt: string,
+  actorId: string,
+  opts: { endAt?: string | null; calendarOverride?: boolean } = {}
+) {
   const ctx = await loadBookingContext(businessId);
   if (!ctx.schemaReady) return null;
   const { data: row } = await ctx.db
     .from("shoot_proposals")
-    .select("id, project_id, end_at, status, assigned_user_id, appointment_key")
+    .select("id, project_id, proposed_at, end_at, status, assigned_user_id, appointment_key")
     .eq("id", proposalId)
     .maybeSingle();
   if (!row || !row.end_at || row.status !== "confirmed" || row.appointment_key !== "primary") return null;
@@ -60,11 +66,17 @@ async function moveEngineAppointment(businessId: string, proposalId: string, pro
   if (!facts) return null;
   const startMs = Date.parse(proposedAt);
   if (!Number.isFinite(startMs)) return NextResponse.json({ error: "Invalid proposed_at" }, { status: 400 });
+  // Keep the shoot's own length when it moves (it may have been resized); a resize sends end_at.
+  const endMs = opts.endAt ? Date.parse(opts.endAt) : NaN;
+  const previousMinutes = Math.round((Date.parse(row.end_at as string) - Date.parse(row.proposed_at as string)) / 60_000);
+  const durationMinutes = Number.isFinite(endMs) && endMs > startMs ? Math.round((endMs - startMs) / 60_000) : previousMinutes;
   const result = await confirmAppointment(ctx, facts, {
     startMs,
     userId: (row.assigned_user_id as string | null) ?? null,
     source: "manual",
     actor: { kind: "business", userId: actorId },
+    durationMinutes: durationMinutes !== facts.durationMinutes || opts.calendarOverride ? durationMinutes : null,
+    override: opts.calendarOverride ? { reason: "Moved on the Shoot Calendar" } : null,
   });
   if (!result.ok) {
     return NextResponse.json(
@@ -415,7 +427,13 @@ export async function PATCH(request: Request) {
     // Booking-engine appointments (v132) move through the same rules as every other booking:
     // hours, buffers, drive time, daily limits, conflicts. Conflicts are refused here; an
     // owner/admin can override from the appointment modal.
-    const engineMove = await moveEngineAppointment(businessId, id, String(proposed_at), profile.id);
+    // Shoot Calendar drags/resizes (owner/admin): a manual override, like booking from the calendar.
+    const calendarOverride = body.calendar_override === true && isOwnerAdmin(profile);
+    const endAt = typeof body.end_at === "string" && Number.isFinite(Date.parse(body.end_at)) ? body.end_at : null;
+    if (endAt && Date.parse(endAt) <= Date.parse(String(proposed_at))) {
+      return NextResponse.json({ error: "The end time must be after the start time." }, { status: 400 });
+    }
+    const engineMove = await moveEngineAppointment(businessId, id, String(proposed_at), profile.id, { endAt, calendarOverride });
     if (engineMove) return engineMove;
 
     const appSettings = await getAppSettings(businessId);
@@ -424,7 +442,7 @@ export async function PATCH(request: Request) {
 
     const { error: moveError } = await db
       .from("shoot_proposals")
-      .update({ proposed_at })
+      .update(endAt ? { proposed_at, end_at: endAt } : { proposed_at })
       .eq("id", id);
     // Nothing is logged, synced or sent unless the move itself saved.
     if (moveError) {

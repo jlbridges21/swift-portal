@@ -250,16 +250,24 @@ async function schedule(ctx: BookingContext, facts: BookingProjectFacts, access:
   if (!access.canManage) return NextResponse.json({ error: "You don't have permission to schedule shoots." }, { status: 403 });
   const start = parseStart(body.start);
   if (start == null) return NextResponse.json({ error: "Choose a date and time." }, { status: 400 });
-  const overrideReason = typeof body.overrideReason === "string" ? body.overrideReason.trim() : "";
+  // Shoot Calendar bookings are a manual override by design (owner/admin): any time, any length.
+  const calendarOverride = body.calendarOverride === true && access.canOverride;
+  const overrideReason = calendarOverride
+    ? "Booked from the Shoot Calendar"
+    : typeof body.overrideReason === "string"
+      ? body.overrideReason.trim()
+      : "";
   if (overrideReason && !access.canOverride) {
     return NextResponse.json({ error: "Only an owner or admin can override scheduling conflicts." }, { status: 403 });
   }
+  const durationMinutes = typeof body.durationMinutes === "number" && Number.isFinite(body.durationMinutes) ? body.durationMinutes : null;
   const result = await confirmAppointment(ctx, facts, {
     startMs: start,
     userId: userIdOrNull(ctx, body.userId),
     source: "manual",
     actor: access.actor,
-    override: overrideReason && body.confirmOverride === true ? { reason: overrideReason } : null,
+    override: overrideReason && (calendarOverride || body.confirmOverride === true) ? { reason: overrideReason } : null,
+    durationMinutes,
   });
   if (!result.ok) {
     return NextResponse.json(

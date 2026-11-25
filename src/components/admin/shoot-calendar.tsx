@@ -53,6 +53,8 @@ import { Switch } from "@/components/ui/switch";
 import { PersonAvatar, initialsOf } from "@/components/admin/booking/booking-ui";
 import { AppointmentModal } from "@/components/admin/booking/appointment-modal";
 import { BookShootDialog, DayRouteSummary } from "@/components/admin/booking/calendar-extras";
+import { EventEditor, type EventDraftPreview, type EventEditorTarget } from "@/components/admin/calendar/event-editor";
+import type { CalendarEventRow } from "@/lib/calendar-events";
 import { CalendarConnectionsButton } from "@/components/admin/booking/calendar-connections";
 import {
   RescheduleConfirmModal,
@@ -60,6 +62,7 @@ import {
   WeekTimeGrid,
   saveShootTime,
   type DragApi,
+  type ResizeApi,
   type WeekGridEvent,
 } from "@/components/admin/calendar/week-time-grid";
 import { externalEventWeekSegments, shootMinutes, shootWeekSegment } from "@/lib/calendar-week";
@@ -88,7 +91,7 @@ import {
   pendingEventChipPaint,
 } from "@/lib/brand-color";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
-import { MobileShootCalendar, type CalendarCreateProject } from "@/components/admin/shoot-calendar-mobile";
+import { MobileShootCalendar, type CalendarCreateProject, type CalendarService } from "@/components/admin/shoot-calendar-mobile";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -170,6 +173,9 @@ interface ShootCalendarProps {
   canReschedule?: boolean;
   teamSource?: Promise<CalendarTeamMember[]>;
   travelSource?: Promise<Record<string, CalendarLeg>>;
+  /** Services for the new-event form (picking one sets the length). */
+  servicesSource?: Promise<CalendarService[]>;
+  viewerUserId?: string | null;
 }
 
 type SourceStatus = "loading" | "ready" | "error";
@@ -180,8 +186,40 @@ type WeekItem = WeekGridEvent &
   ({ kind: "shoot"; key: string; shoot: CalendarShoot } | { kind: "google"; key: string; event: ExternalCalendarEvent });
 
 /** Outlook events/calendars carry an "outlook:" id prefix; everything else is Google. */
-function externalProvider(calendarId: string): "Google" | "Outlook" {
+function externalProvider(calendarId: string): "Google" | "Outlook" | "ShootPortal" {
+  if (calendarId === SP_EVENTS_CALENDAR) return "ShootPortal";
   return calendarId.startsWith("outlook:") ? "Outlook" : "Google";
+}
+
+/** Calendar events (v139) ride along with external events under this pseudo calendar id. */
+const SP_EVENTS_CALENDAR = "sp-events";
+const SP_EVENT_PREFIX = "sp-event:";
+const isSpEvent = (event: { calendarId: string }) => event.calendarId === SP_EVENTS_CALENDAR;
+
+/** A ShootPortal calendar event as an external-style event (month/agenda/week reuse the same cards). */
+function calendarEventToExternal(row: CalendarEventRow, timeZone: string, color: string): ExternalCalendarEvent {
+  const startKey = zonedDayKey(row.start_at, timeZone);
+  const endMs = Date.parse(row.end_at);
+  const dayKeys: string[] = [];
+  for (let t = Date.parse(row.start_at), guard = 0; t < endMs && guard < 10; t += 86_400_000, guard++) {
+    const key = zonedDayKey(new Date(t).toISOString(), timeZone);
+    if (!dayKeys.includes(key)) dayKeys.push(key);
+  }
+  const lastKey = zonedDayKey(new Date(endMs - 1).toISOString(), timeZone);
+  if (!dayKeys.includes(lastKey)) dayKeys.push(lastKey);
+  return {
+    id: `${SP_EVENT_PREFIX}${row.id}`,
+    title: row.title || "(No title)",
+    calendarId: SP_EVENTS_CALENDAR,
+    calendarSummary: "ShootPortal",
+    htmlLink: null,
+    allDay: false,
+    start: row.start_at,
+    end: row.end_at,
+    dayKeys: dayKeys.length ? dayKeys : [startKey],
+    timeLabel: formatTimeRange(row.start_at, Math.round((endMs - Date.parse(row.start_at)) / 60_000), timeZone),
+    calendarColor: color,
+  };
 }
 
 function externalKey(event: ExternalCalendarEvent) {
@@ -805,6 +843,13 @@ function weekBlockAppearance(
     };
   }
   const color = eventChipPaint(colorFor(item.event.calendarId, item.event.calendarColor), "#7C3AED").background;
+  if (isSpEvent(item.event)) {
+    return {
+      className: "text-heading",
+      style: { borderLeftColor: color, backgroundColor: `color-mix(in srgb, ${color} 16%, var(--color-card))` },
+      title: `${item.event.title} · ${item.event.timeLabel}`,
+    };
+  }
   return {
     className: "bg-card text-heading",
     style: { borderLeftColor: color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` },
@@ -827,6 +872,8 @@ export function ShootCalendar({
   canReschedule = false,
   teamSource,
   travelSource,
+  servicesSource,
+  viewerUserId = null,
 }: ShootCalendarProps) {
   const router = useRouter();
   const [team, setTeam] = useState<CalendarTeamMember[]>([]);
@@ -891,6 +938,16 @@ export function ShootCalendar({
   );
   useStreamed(coversSource, setCovers);
   useStreamed(createProjectsSource, setCreateProjects);
+  const [services, setServices] = useState<CalendarService[]>([]);
+  useStreamed(servicesSource ?? null, setServices);
+  // Calendar events (v139): click-to-create events without a project.
+  const [calEvents, setCalEvents] = useState<CalendarEventRow[]>([]);
+  const [calEventsWindow, setCalEventsWindow] = useState<{ from: string; to: string } | null>(null);
+  const [calEventsVersion, setCalEventsVersion] = useState(0);
+  const [editorTarget, setEditorTarget] = useState<EventEditorTarget | null>(null);
+  const [draft, setDraft] = useState<EventDraftPreview | null>(null);
+  // Optimistic resize of shoots (shoot id → new end) until fresh data arrives.
+  const [ends, setEnds] = useState<Record<string, string>>({});
   useStreamed(
     googleSource,
     (result) => {
@@ -941,10 +998,16 @@ export function ShootCalendar({
         .map((s) => {
           const moved = moves[s.id];
           const cover = covers[s.project_id];
-          if (!moved && cover === undefined) return s;
-          return { ...s, ...(moved ? { proposed_at: moved } : {}), ...(cover !== undefined ? { cover_url: cover } : {}) };
+          const end = ends[s.id];
+          if (!moved && cover === undefined && !end) return s;
+          return {
+            ...s,
+            ...(moved ? { proposed_at: moved } : {}),
+            ...(end ? { end_at: end } : {}),
+            ...(cover !== undefined ? { cover_url: cover } : {}),
+          };
         }),
-    [shoots, moves, covers, hiddenStaff]
+    [shoots, moves, covers, hiddenStaff, ends]
   );
   const sortedShoots = useMemo(
     () => [...shownShoots].sort((a, b) => compareAsc(parseISO(a.proposed_at), parseISO(b.proposed_at))),
@@ -957,10 +1020,37 @@ export function ShootCalendar({
   const shownExternal = useMemo(() => {
     const hidden = new Set(hiddenCalendarIds);
     const google = canLoadExternal ? externalEvents.filter((event) => !hidden.has(event.calendarId)) : [];
-    if (!canLoadOutlook || !outlookEvents.length) return google;
     const hiddenOutlook = new Set(outlookHidden);
-    return [...google, ...outlookEvents.filter((event) => !hiddenOutlook.has(event.calendarId))];
-  }, [canLoadExternal, externalEvents, hiddenCalendarIds, canLoadOutlook, outlookEvents, outlookHidden]);
+    const outlook = canLoadOutlook ? outlookEvents.filter((event) => !hiddenOutlook.has(event.calendarId)) : [];
+    // ShootPortal calendar events: shown with the Shoots toggle, colored like their person's shoots.
+    const personal = showShoots
+      ? calEvents
+          .filter((row) => !row.assigned_user_id || !hiddenStaff.includes(row.assigned_user_id))
+          .map((row) => {
+            const index = team.findIndex((m) => m.userId === row.assigned_user_id);
+            const member = index >= 0 ? team[index] : null;
+            const color =
+              team.length > 1 && member
+                ? member.color || TEAM_AUTO_COLORS[index % TEAM_AUTO_COLORS.length]
+                : calendarColors.shoots || SHOOTPORTAL_EVENT_COLOR;
+            return calendarEventToExternal(row, businessTimeZone, color);
+          })
+      : [];
+    return [...google, ...outlook, ...personal];
+  }, [
+    canLoadExternal,
+    externalEvents,
+    hiddenCalendarIds,
+    canLoadOutlook,
+    outlookEvents,
+    outlookHidden,
+    showShoots,
+    calEvents,
+    hiddenStaff,
+    team,
+    calendarColors.shoots,
+    businessTimeZone,
+  ]);
   const visibleShoots = useMemo(
     () => (showShoots ? sortedShoots : []),
     [showShoots, sortedShoots]
@@ -1143,6 +1233,34 @@ export function ShootCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canLoadOutlook, needFromMs, needToMs, outlookRetry]);
 
+  // ── Calendar events (v139): the window around the view; refetched after a change ──
+  useEffect(() => {
+    const covered =
+      calEventsWindow && Date.parse(calEventsWindow.from) <= needFromMs && Date.parse(calEventsWindow.to) >= needToMs;
+    if (covered && calEventsVersion === 0) return;
+    const win = calEventsWindow && covered ? calEventsWindow : googleWindowFor(new Date(needFromMs + (needToMs - needFromMs) / 2));
+    const controller = new AbortController();
+    fetch(`/api/calendar-events?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as { events?: CalendarEventRow[] };
+        setCalEvents(data.events ?? []);
+        setCalEventsWindow(win);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setCalEventsWindow(win);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCalEventsVersion(0);
+      });
+    return () => controller.abort();
+    // calEventsWindow is read only to skip covered ranges.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needFromMs, needToMs, calEventsVersion]);
+
   useLayoutEffect(() => {
     if (view !== "agenda") return;
     const root = agendaRef.current;
@@ -1218,7 +1336,7 @@ export function ShootCalendar({
     setMovingSaving(true);
     const { shoot, toDay, toIso } = pendingMove;
     try {
-      await saveShootTime(shoot.id, toIso);
+      await saveShootTime(shoot.id, toIso, { calendarOverride: isOwner });
       toast.success(`${shoot.project_name} moved to ${describeSlot(toDay, toIso, businessTimeZone)}`);
       setSelectedDayKey(toDay);
       // Fresh shoots replace the optimistic move when they stream in (and Projects' cache too).
@@ -1447,9 +1565,17 @@ export function ShootCalendar({
   }, [view, weekStartKey, dayViewKey, visibleShoots, shownExternal, businessTimeZone, showTravel, travel]);
 
   const weekDrag: DragApi<WeekItem> = {
-    canDrag: (item) => item.kind === "shoot" && canReschedule,
+    canDrag: (item) =>
+      item.kind === "shoot" ? canReschedule : canEditEvent(item.event) && !item.allDay && item.event.dayKeys.length === 1,
     drop: (item, toDay, toMin) => {
-      if (item.kind === "shoot") requestMove(item.shoot, toDay, toMin);
+      if (item.kind === "shoot") {
+        requestMove(item.shoot, toDay, toMin);
+        return;
+      }
+      const length = Date.parse(item.event.end || item.event.start) - Date.parse(item.event.start);
+      const startIso = zonedTimeToIso(toDay, toMin, businessTimeZone);
+      if (startIso === new Date(item.event.start).toISOString()) return;
+      void patchCalendarEvent(item.event, startIso, new Date(Date.parse(startIso) + length).toISOString());
     },
     suppressClick,
   };
@@ -1460,8 +1586,77 @@ export function ShootCalendar({
       return;
     }
     if (item.kind === "shoot") openShoot(item.shoot);
-    else setOpenedExternal(item.event);
+    else openExternal(item.event);
   }
+
+  /** Google/Outlook events open read-only; ShootPortal calendar events open in the editor. */
+  function openExternal(event: ExternalCalendarEvent) {
+    if (isSpEvent(event)) {
+      const row = calEvents.find((r) => `${SP_EVENT_PREFIX}${r.id}` === event.id);
+      if (row) setEditorTarget({ kind: "edit", event: row });
+      return;
+    }
+    setOpenedExternal(event);
+  }
+
+  const canEditEvent = (event: ExternalCalendarEvent) => {
+    if (!isSpEvent(event)) return false;
+    if (isOwner) return true;
+    const row = calEvents.find((r) => `${SP_EVENT_PREFIX}${r.id}` === event.id);
+    return Boolean(row && viewerUserId && row.assigned_user_id === viewerUserId);
+  };
+
+  /** Move/resize a calendar event immediately (no client is notified), like Google Calendar. */
+  async function patchCalendarEvent(event: ExternalCalendarEvent, startIso: string, endIso: string) {
+    const id = event.id.slice(SP_EVENT_PREFIX.length);
+    const before = calEvents;
+    setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, start_at: startIso, end_at: endIso } : r)));
+    const res = await fetch("/api/calendar-events", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, start: startIso, end: endIso }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setCalEvents(before);
+      const body = (await res?.json().catch(() => ({}))) as { error?: string };
+      toast.error(body.error || "Couldn't move the event.");
+      return;
+    }
+    const body = (await res.json().catch(() => ({}))) as { event?: CalendarEventRow };
+    if (body.event) setCalEvents((rows) => rows.map((r) => (r.id === id ? body.event! : r)));
+  }
+
+  /** Resize a shoot from the bottom edge: saved straight away (owner/admin: manual override). */
+  async function resizeShoot(shoot: CalendarShoot, endIso: string) {
+    setEnds((m) => ({ ...m, [shoot.id]: endIso }));
+    try {
+      await saveShootTime(shoot.id, shoot.proposed_at, { endIso, calendarOverride: isOwner });
+      toast.success(`${shoot.project_name} now ends at ${new Intl.DateTimeFormat("en-US", { timeZone: businessTimeZone, hour: "numeric", minute: "2-digit" }).format(new Date(endIso))}`);
+      router.refresh();
+    } catch (err) {
+      setEnds((m) => {
+        const next = { ...m };
+        delete next[shoot.id];
+        return next;
+      });
+      toast.error(err instanceof Error ? err.message : "Couldn't change the shoot length.");
+    }
+  }
+
+  const weekResize: ResizeApi<WeekItem> = {
+    canResize: (item) => {
+      if (item.allDay) return false;
+      if (item.kind === "shoot") return canReschedule && item.shoot.proposal_status !== "pending";
+      // Single-day events only (a multi-day event's segment end isn't its real end).
+      return canEditEvent(item.event) && item.event.dayKeys.length === 1;
+    },
+    commit: (item, endMin) => {
+      const endIso = zonedTimeToIso(item.dayKey, endMin, businessTimeZone);
+      if (item.kind === "shoot") void resizeShoot(item.shoot, endIso);
+      else void patchCalendarEvent(item.event, item.event.start, endIso);
+    },
+  };
 
   const sourceStatus = (
     <SourceStatusBar
@@ -1523,7 +1718,7 @@ export function ShootCalendar({
             />
           )}
           renderExternal={(event) => (
-            <GoogleEventCard event={event} variant="compact" onOpen={() => setOpenedExternal(event)} />
+            <GoogleEventCard event={event} variant="compact" onOpen={() => openExternal(event)} />
           )}
         />
       </div>
@@ -1919,7 +2114,7 @@ export function ShootCalendar({
                     onSelectDay={() => setSelectedDayKey(key)}
                     onDrop={(e) => handleDropOnDay(e, day)}
                     onOpenShoot={openShoot}
-                    onOpenExternal={setOpenedExternal}
+                    onOpenExternal={openExternal}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     draggingId={draggingId}
@@ -1939,12 +2134,15 @@ export function ShootCalendar({
             byDay={weekByDay}
             timeZone={businessTimeZone}
             drag={weekDrag}
+            resize={weekResize}
+            draft={draft}
+            onCreateAt={(dayKey, startMin) => setEditorTarget({ kind: "new", dayKey, startMin })}
             onOpenEvent={(item) => openWeekItem(item)}
             eventKey={(item) => item.key}
             ghostLabel={(item) => (item.kind === "shoot" ? item.shoot.project_name : item.event.title)}
             renderAllDay={(item) =>
               item.kind === "google" ? (
-                <GoogleAllDayChip event={item.event} onOpen={() => setOpenedExternal(item.event)} />
+                <GoogleAllDayChip event={item.event} onOpen={() => openExternal(item.event)} />
               ) : null
             }
             blockAppearance={(item) => weekBlockAppearance(item, colorForShoot, colorFor, businessTimeZone)}
@@ -1970,7 +2168,8 @@ export function ShootCalendar({
                   <span className="block truncate font-semibold">{item.event.title}</span>
                   {roomy ? (
                     <span className="block truncate opacity-80">
-                      {item.event.timeLabel} · Google
+                      {item.event.timeLabel}
+                      {isSpEvent(item.event) ? null : ` · ${externalProvider(item.event.calendarId)}`}
                     </span>
                   ) : null}
                 </>
@@ -2024,7 +2223,7 @@ export function ShootCalendar({
                         <ShootEventCard key={shoot.id} shoot={shoot} onOpen={() => openShoot(shoot)} />
                       ))}
                       {items.external.map((event) => (
-                        <GoogleEventCard key={event.id} event={event} onOpen={() => setOpenedExternal(event)} />
+                        <GoogleEventCard key={event.id} event={event} onOpen={() => openExternal(event)} />
                       ))}
                     </div>
                   )}
@@ -2042,6 +2241,26 @@ export function ShootCalendar({
         onClose={() => setSelected(null)}
         onChanged={() => router.refresh()}
       />
+      <EventEditor
+        target={editorTarget}
+        onClose={() => {
+          setEditorTarget(null);
+          setDraft(null);
+        }}
+        onSaved={() => {
+          setEditorTarget(null);
+          setDraft(null);
+          setCalEventsVersion((v) => v + 1);
+          router.refresh();
+        }}
+        onDraftChange={setDraft}
+        timeZone={businessTimeZone}
+        services={services}
+        projects={createProjects}
+        team={team.filter((m) => m.bookable || m.userId === viewerUserId).map((m) => ({ userId: m.userId, name: m.name }))}
+        viewerUserId={viewerUserId}
+        canBookProjects={canCreateShoot}
+      />
       {canCreateShoot ? (
         <BookShootDialog
           open={bookOpen}
@@ -2049,6 +2268,7 @@ export function ShootCalendar({
           projects={createProjects}
           timeZone={businessTimeZone}
           team={team.filter((m) => m.bookable).map((m) => ({ userId: m.userId, name: m.name }))}
+          calendarOverride={isOwner}
           onBooked={() => {
             setBookOpen(false);
             router.refresh();
