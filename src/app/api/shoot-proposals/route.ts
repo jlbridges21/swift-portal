@@ -12,6 +12,7 @@ import { canAccessProject } from "@/lib/project-access";
 import { logWorkflowAudit, logWorkflowSkipped, portalLink, resolveProjectMessageTemplate } from "@/lib/workflow";
 import { isOwnerAdmin, staffCan } from "@/lib/staff-access";
 import { resolveBusinessTimeZone, syncShootToGoogleSafe } from "@/lib/google-calendar";
+import { reconcileOutlookProjectSafe, syncShootToOutlookSafe } from "@/lib/outlook-calendar";
 import { zonedDayKey } from "@/lib/google-calendar-pull";
 import { loadBookingContext, loadProjectBookingFacts } from "@/lib/booking/server";
 import { confirmAppointment } from "@/lib/booking/actions";
@@ -264,6 +265,7 @@ export async function POST(request: Request) {
   }
 
   await syncShootToGoogleSafe(businessId, data.id, "upsert");
+  await syncShootToOutlookSafe(businessId, data.id, "upsert");
 
   return NextResponse.json(data);
 }
@@ -385,9 +387,11 @@ export async function PATCH(request: Request) {
     });
 
     await syncShootToGoogleSafe(businessId, id, "upsert");
+    await syncShootToOutlookSafe(businessId, id, "upsert");
     for (const other of otherPending ?? []) {
       if (other.google_event_id) await syncShootToGoogleSafe(businessId, other.id, "delete");
     }
+    await reconcileOutlookProjectSafe(businessId, proposal.project_id);
 
     return NextResponse.json({ success: true, status: "confirmed" });
   }
@@ -473,6 +477,7 @@ export async function PATCH(request: Request) {
     }
 
     await syncShootToGoogleSafe(businessId, id, "upsert");
+    await syncShootToOutlookSafe(businessId, id, "upsert");
 
     return NextResponse.json({ success: true, proposed_at });
   }
@@ -521,8 +526,10 @@ export async function PATCH(request: Request) {
         .update({ google_event_id: null, google_sync_status: null, google_sync_error: null })
         .eq("id", confirmedProposal.id);
       await syncShootToGoogleSafe(businessId, newProposal.id, "upsert");
+      await syncShootToOutlookSafe(businessId, newProposal.id, "upsert");
     } else if (newProposal?.id) {
       await syncShootToGoogleSafe(businessId, newProposal.id, "upsert");
+      await syncShootToOutlookSafe(businessId, newProposal.id, "upsert");
     }
 
     const dateStr = new Date(proposed_at).toLocaleString();
@@ -580,8 +587,10 @@ export async function PATCH(request: Request) {
         .update({ google_event_id: null, google_sync_status: null, google_sync_error: null })
         .eq("id", id);
       await syncShootToGoogleSafe(businessId, counter.id, "upsert");
+      await syncShootToOutlookSafe(businessId, counter.id, "upsert");
     } else if (counter?.id) {
       await syncShootToGoogleSafe(businessId, counter.id, "upsert");
+      await syncShootToOutlookSafe(businessId, counter.id, "upsert");
     }
 
     const dateStr = new Date(proposed_at).toLocaleString();
@@ -628,6 +637,7 @@ export async function PATCH(request: Request) {
     if (proposal.google_event_id) {
       await syncShootToGoogleSafe(businessId, id, "delete");
     }
+    await syncShootToOutlookSafe(businessId, id, "delete");
 
     const dateStr = new Date(proposal.proposed_at).toLocaleString();
     const withdrawn = isAdmin && proposal.proposed_by === "admin";

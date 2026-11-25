@@ -363,6 +363,8 @@ export async function PATCH(request: Request) {
           .eq("business_id", businessId);
         const { syncShootToGoogleSafe } = await import("@/lib/google-calendar");
         await syncShootToGoogleSafe(businessId, confirmed.id, "upsert");
+        const { syncShootToOutlookSafe } = await import("@/lib/outlook-calendar");
+        await syncShootToOutlookSafe(businessId, confirmed.id, "upsert");
       }
     }
 

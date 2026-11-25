@@ -10,6 +10,7 @@ import { logProjectActivity } from "@/lib/activity";
 import { notifyAdmins, notifyProjectClients } from "@/lib/notifications";
 import { getAppSettings } from "@/lib/app-settings";
 import { syncShootToGoogleSafe } from "@/lib/google-calendar";
+import { reconcileOutlookProjectSafe } from "@/lib/outlook-calendar";
 import { VIOLATION_COPY } from "@/lib/booking/engine";
 import { formatZoned } from "@/lib/booking/time";
 import { checkStart, type BookingContext, type BookingProjectFacts } from "@/lib/booking/server";
@@ -72,6 +73,7 @@ export async function offerTimes(
         replaced.map((r) => r.id as string)
       );
     for (const r of replaced) if (r.google_event_id) await syncShootToGoogleSafe(ctx.businessId, r.id as string, "delete");
+    await reconcileOutlookProjectSafe(ctx.businessId, facts.projectId);
   }
 
   const message = input.message?.trim().slice(0, 1000) || null;
@@ -193,5 +195,6 @@ export async function acceptProposal(
   }
 
   for (const p of pendingWithEvents ?? []) await syncShootToGoogleSafe(ctx.businessId, p.id as string, "delete");
+  await reconcileOutlookProjectSafe(ctx.businessId, facts.projectId);
   return result;
 }

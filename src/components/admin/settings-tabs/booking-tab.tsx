@@ -143,7 +143,7 @@ export function BookingTab() {
           <BookingCard
             icon={CalendarX2}
             title="Calendars that block availability"
-            description="Busy times on these Google calendars keep you from being double-booked."
+            description="Busy times on these Google calendars keep you from being double-booked. Outlook calendars are chosen in Integrations → Outlook Calendar."
             id="settings-booking-calendars"
           >
             {!google?.connected ? (
