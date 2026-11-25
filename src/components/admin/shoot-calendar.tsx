@@ -905,6 +905,8 @@ export function ShootCalendar({
   const [outlookWindow, setOutlookWindow] = useState<{ from: string; to: string } | null>(null);
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "loading" | "ready" | "degraded" | "error">("idle");
   const [outlookRetry, setOutlookRetry] = useState(0);
+  const [outlookLoaded, setOutlookLoaded] = useState<string[]>([]);
+  const [outlookFailed, setOutlookFailed] = useState<string[]>([]);
   const [outlookOpen, setOutlookOpen] = useState(true);
   const [externalEvents, setExternalEvents] = useState<ExternalCalendarEvent[]>([]);
   const [externalWindow, setExternalWindow] = useState<{ from: string; to: string } | null>(null);
@@ -1210,8 +1212,12 @@ export function ShootCalendar({
           colors: Record<string, string>;
           events: ExternalCalendarEvent[];
           degraded: boolean;
+          loadedCalendarIds?: string[];
+          failedCalendarIds?: string[];
         };
         setOutlookCalendars(data.connected ? data.calendars : []);
+        setOutlookLoaded(data.loadedCalendarIds ?? data.calendars.map((c) => c.id));
+        setOutlookFailed(data.failedCalendarIds ?? []);
         setOutlookHidden(data.hiddenCalendarIds);
         setOutlookEvents(data.events);
         setOutlookWindow(win);
@@ -1495,7 +1501,10 @@ export function ShootCalendar({
   }
 
   async function persistOutlookHidden(next: string[]) {
+    const previous = outlookHidden;
     setOutlookHidden(next);
+    // Hidden calendars aren't fetched: turning one on loads it (after the choice is saved).
+    const needsLoad = outlookCalendars.some((c) => !next.includes(c.id) && previous.includes(c.id) && !outlookLoaded.includes(c.id));
     const res = await fetch("/api/integrations/outlook-calendar/display", {
       method: "PATCH",
       credentials: "include",
@@ -1505,7 +1514,9 @@ export function ShootCalendar({
     if (!res?.ok) {
       const data = (await res?.json().catch(() => ({}))) as { error?: string };
       toast.error(data.error || "Could not save Outlook calendar visibility");
+      return;
     }
+    if (needsLoad) setOutlookRetry((n) => n + 1);
   }
 
   async function persistHidden(next: string[]) {
@@ -1988,7 +1999,14 @@ export function ShootCalendar({
                   <div className="space-y-1">
                     {outlookStatus === "error" || outlookStatus === "degraded" ? (
                       <p className="text-[11px] text-amber-700 surface-dark:text-amber-300">
-                        {outlookStatus === "error" ? "Outlook events couldn’t load. " : "Some Outlook calendars didn’t load. "}
+                        {outlookStatus === "error"
+                          ? "Outlook events couldn’t load. "
+                          : (() => {
+                              const names = outlookCalendars.filter((c) => outlookFailed.includes(c.id)).map((c) => c.summary);
+                              return names.length
+                                ? `Outlook didn’t load ${names.join(", ")}. `
+                                : "Some Outlook calendars didn’t load. ";
+                            })()}
                         <button type="button" className="font-semibold underline" onClick={() => setOutlookRetry((n) => n + 1)}>
                           Retry
                         </button>
