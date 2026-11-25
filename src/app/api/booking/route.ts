@@ -52,6 +52,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error }, { status: 404 });
   }
 
+  // The shoot's own photographer without scheduling rights: details and times only.
+  if (access.viewOnly && !["details", "availability", "check"].includes(action)) {
+    return NextResponse.json({ error: "You don't have permission to change this shoot." }, { status: 403 });
+  }
+
   const ctx = await loadBookingContext(access.businessId);
   const facts = await loadProjectBookingFacts(ctx, access.projectId);
   if (!facts) return NextResponse.json({ error: "Project not found." }, { status: 404 });
@@ -325,7 +330,11 @@ async function clientBookingLink(ctx: BookingContext, facts: BookingProjectFacts
 
 async function details(ctx: BookingContext, facts: BookingProjectFacts, access: BookingAccess) {
   const appt = facts.appointment;
-  const [estimate, cover] = await Promise.all([loadEstimateSummary(ctx, facts.projectId), coverUrlFor(ctx, facts.projectId)]);
+  const [estimate, cover] = await Promise.all([
+    // Staff without money access never receive the client's price.
+    access.canSeePrice ? loadEstimateSummary(ctx, facts.projectId) : Promise.resolve(null),
+    coverUrlFor(ctx, facts.projectId),
+  ]);
   const base = {
     project: {
       id: facts.projectId,
@@ -349,6 +358,7 @@ async function details(ctx: BookingContext, facts: BookingProjectFacts, access: 
     bookingLink: access.canManage && instantBookingActive(ctx) ? await clientBookingLink(ctx, facts) : null,
     canManage: access.canManage,
     canOverride: access.canOverride,
+    canSeePrice: access.canSeePrice,
     schemaReady: ctx.schemaReady,
     routesConfigured: routesConfigured(),
     team: isTeamBusiness(ctx.team),

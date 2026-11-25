@@ -44,6 +44,8 @@ type Details = {
   estimate: { kind: string; status: string; totalCents: number; lines: { description: string; amountCents: number; travel: boolean }[] } | null;
   timeZone: string;
   canManage: boolean;
+  /** False for staff without money access: the price column is left out. */
+  canSeePrice?: boolean;
   canOverride: boolean;
   schemaReady: boolean;
   routesConfigured: boolean;
@@ -265,6 +267,7 @@ export function AppointmentModal({
                     ))}
                   </ul>
                 </div>
+                {data.canSeePrice !== false ? (
                 <div className="lg:pl-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-heading">
                     <ReceiptText className="h-4 w-4 text-muted" /> {data.estimate?.kind === "official" ? "Proposal total" : "Estimate total"}
@@ -285,6 +288,7 @@ export function AppointmentModal({
                     <p className="mt-1 text-sm text-muted">No estimate yet</p>
                   )}
                 </div>
+                ) : null}
               </section>
 
               {notice ? (

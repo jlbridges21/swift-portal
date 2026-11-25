@@ -3,6 +3,8 @@
  *  - client via booking-link token (bound to business + client + project, host must match)
  *  - signed-in client with access to the project
  *  - business owner/admin, or staff with scheduling permission
+ *  - staff assigned to one of the project's shoots: view only (they can always see their own
+ *    shoot's details, route and timing, even without scheduling or project access)
  */
 import { getProfile } from "@/lib/auth";
 import { getPublicHostContext } from "@/lib/host-resolution";
@@ -21,7 +23,29 @@ export type BookingAccess = {
   /** Business: may confirm/override/reassign (owner, admin, staff with scheduling.confirm). */
   canManage: boolean;
   canOverride: boolean;
+  /** May see the estimate / proposal amounts (owner, admin, or staff with money.view). */
+  canSeePrice: boolean;
+  /** Only here as the shoot's photographer: may look, never change anything. */
+  viewOnly: boolean;
 };
+
+/** The person is the photographer on one of this project's live shoots. */
+async function isAssignedPhotographer(businessId: string, projectId: string, userId: string): Promise<boolean> {
+  try {
+    const db = await createTenantServiceClient(businessId);
+    const { data } = await db
+      .from("shoot_proposals")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("assigned_user_id", userId)
+      .in("status", ["confirmed", "pending", "countered"])
+      .limit(1);
+    return Boolean(data?.length);
+  } catch {
+    // Before v132 there is no assignment column: fall back to the usual checks.
+    return false;
+  }
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -47,6 +71,8 @@ export async function resolveBookingAccess(input: {
       role: "client",
       canManage: false,
       canOverride: false,
+      canSeePrice: true,
+      viewOnly: false,
     };
   }
 
@@ -56,7 +82,10 @@ export async function resolveBookingAccess(input: {
   if (!profile) return null;
   const tenant = await getTenantContext();
   if (!tenant || tenant.isSharedViewer) return null;
-  if (!(await canAccessProject(profile, projectId))) return null;
+  const owner = isOwnerAdmin(profile);
+  const assigned =
+    !owner && profile.role === "staff" ? await isAssignedPhotographer(tenant.businessId, projectId, profile.id) : false;
+  if (!assigned && !(await canAccessProject(profile, projectId))) return null;
 
   if (profile.role === "client") {
     return {
@@ -66,11 +95,13 @@ export async function resolveBookingAccess(input: {
       role: "client",
       canManage: false,
       canOverride: false,
+      canSeePrice: true,
+      viewOnly: false,
     };
   }
   const readOnly = Boolean(tenant.impersonating && !tenant.allowWrites);
   const canManage = !readOnly && (isOwnerAdmin(profile) || staffCan(profile, "scheduling.confirm"));
-  if (!isOwnerAdmin(profile) && !staffCan(profile, "scheduling.propose") && !canManage) return null;
+  if (!owner && !staffCan(profile, "scheduling.propose") && !canManage && !assigned) return null;
   return {
     businessId: tenant.businessId,
     projectId,
@@ -78,6 +109,8 @@ export async function resolveBookingAccess(input: {
     role: "business",
     canManage,
     // Overrides are owner/admin only.
-    canOverride: !readOnly && isOwnerAdmin(profile),
+    canOverride: !readOnly && owner,
+    canSeePrice: owner || staffCan(profile, "money.view"),
+    viewOnly: !owner && !canManage && !staffCan(profile, "scheduling.propose"),
   };
 }
