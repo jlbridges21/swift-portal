@@ -22,8 +22,16 @@ import { buildEventText } from "@/lib/booking/event-template";
 import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getBusinessPortalOriginById } from "@/lib/portal-url";
 import { openWithPurpose, sealWithPurpose } from "@/lib/purpose-cipher";
-import { toExternalEvent, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
-import { outlookEventDetails, type ExternalEventDetails } from "@/lib/external-event-details";
+import { toExternalEvent, zonedDayKey, type ExternalCalendarEvent } from "@/lib/google-calendar-pull";
+import {
+  addDaysToDate,
+  graphUtcToIso,
+  mergeOutlookAttendees,
+  outlookEventDetails,
+  shiftSeriesTimes,
+  type ExternalEventDetails,
+  type ExternalEventUpdate,
+} from "@/lib/external-event-details";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -996,7 +1004,13 @@ export async function outlookDailyUpkeep(businessId: string): Promise<{ ok: bool
 
 export const OUTLOOK_DISPLAY_PREFIX = "outlook:";
 
-type GraphDisplayEvent = GraphViewEvent & { subject?: string; webLink?: string };
+type GraphDisplayEvent = GraphViewEvent & {
+  subject?: string;
+  webLink?: string;
+  isOrganizer?: boolean;
+  type?: string;
+  seriesMasterId?: string | null;
+};
 
 /** Every displayable event (incl. free and all-day; not cancelled/declined) on one calendar. */
 export async function listOutlookDisplayEvents(
@@ -1010,7 +1024,7 @@ export async function listOutlookDisplayEvents(
   const params = new URLSearchParams({
     startDateTime: fromIso,
     endDateTime: toIso,
-    $select: "id,subject,webLink,isAllDay,isCancelled,showAs,start,end,responseStatus",
+    $select: "id,subject,webLink,isAllDay,isCancelled,showAs,start,end,responseStatus,isOrganizer,type,seriesMasterId",
     $top: "250",
   });
   let next: string | null = `/me/calendars/${encodeURIComponent(calendarId)}/calendarView?${params.toString()}`;
@@ -1147,7 +1161,14 @@ export async function loadOutlookDisplayWindow(
         for (const e of raw) {
           if (e.id && ownIds.has(e.id)) continue;
           const shaped = toExternalEvent(outlookEventAsGoogleShape(e), prefixId(cal.id), cal.name, timeZone, cal.color);
-          if (shaped) events.push({ ...shaped, id: prefixId(shaped.id) });
+          if (shaped)
+            events.push({
+              ...shaped,
+              id: prefixId(shaped.id),
+              // Invitations can't be changed by a guest; read-only (shared) calendars not at all.
+              editable: cal.canEdit && e.isOrganizer !== false,
+              recurring: Boolean(e.seriesMasterId) || e.type === "occurrence" || e.type === "exception",
+            });
         }
         loadedCalendarIds.push(prefixId(cal.id));
       } catch (err) {
@@ -1217,6 +1238,41 @@ async function ownCalendarEventOutlookIds(businessId: string): Promise<string[]>
   }
 }
 
+function outlookEventPath(calendarId: string, eventId: string): string {
+  return `/me/calendars/${encodeURIComponent(unprefixId(calendarId))}/events/${encodeURIComponent(unprefixId(eventId))}`;
+}
+
+/** Microsoft's error → a sentence the owner can act on. */
+async function outlookEditError(res: Response, action: string): Promise<Error> {
+  const err = await graphError(res, action);
+  console.error(`[outlook-calendar] ${action} failed`, { status: res.status, error: err.message.slice(0, 200) });
+  if (res.status === 403 || /ErrorAccessDenied|AccessDenied/i.test(err.message)) {
+    return new Error("Outlook doesn't let this account change that event (it's an invitation or on a calendar shared with you).");
+  }
+  if (res.status === 404 || /ErrorItemNotFound/i.test(err.message)) {
+    return new Error("This event no longer exists in Outlook. Refresh and try again.");
+  }
+  if (res.status === 400) return new Error(`Outlook rejected the change: ${err.message.replace(/^[A-Za-z]+: /, "").slice(0, 160)}`);
+  return new Error(`Couldn't ${action} in Outlook. Try again.`);
+}
+
+type GraphEditableEvent = {
+  id?: string;
+  type?: string;
+  seriesMasterId?: string | null;
+  isAllDay?: boolean;
+  isOrganizer?: boolean;
+  start?: { dateTime?: string };
+  end?: { dateTime?: string };
+  attendees?: { type?: string; emailAddress?: { name?: string; address?: string } }[];
+};
+
+async function getOutlookEventRaw(token: string, calendarId: string, eventId: string): Promise<GraphEditableEvent> {
+  const res = await graph(token, `${outlookEventPath(calendarId, eventId)}?$select=id,type,seriesMasterId,isAllDay,isOrganizer,start,end,attendees`);
+  if (!res.ok) throw await outlookEditError(res, "load the event");
+  return (await res.json()) as GraphEditableEvent;
+}
+
 /**
  * Full details for one Outlook event on the Shoot Calendar (owner only; nothing stored).
  * Ids arrive prefixed "outlook:" from the display window.
@@ -1230,12 +1286,113 @@ export async function getOutlookEventDetails(
   const access = await getOutlookAccess(businessId, transport);
   if (!access.ok) throw new Error("Outlook is not connected.");
   const select =
-    "body,bodyPreview,location,locations,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,organizer,attendees,seriesMasterId,type,showAs,sensitivity";
-  const path = `/me/calendars/${encodeURIComponent(unprefixId(calendarId))}/events/${encodeURIComponent(unprefixId(eventId))}?$select=${select}`;
-  const res = await graph(access.token, path, {
-    transport,
-    headers: { Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"' },
-  });
+    "body,bodyPreview,location,locations,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,organizer,attendees,seriesMasterId,type,showAs,sensitivity,isOrganizer,isAllDay,start,end";
+  const [res, cal] = await Promise.all([
+    graph(access.token, `${outlookEventPath(calendarId, eventId)}?$select=${select}`, {
+      transport,
+      headers: { Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"' },
+    }),
+    graph(access.token, `/me/calendars/${encodeURIComponent(unprefixId(calendarId))}?$select=canEdit,defaultOnlineMeetingProvider`, { transport })
+      .then(async (r) => (r.ok ? ((await r.json()) as { canEdit?: boolean; defaultOnlineMeetingProvider?: string }) : null))
+      .catch(() => null),
+  ]);
   if (!res.ok) throw await graphError(res, "event details");
-  return outlookEventDetails(await res.json());
+  return outlookEventDetails(await res.json(), {
+    calendarCanEdit: cal ? cal.canEdit !== false : true,
+    meetingProvider: cal?.defaultOnlineMeetingProvider ?? null,
+  });
+}
+
+/**
+ * Edits an Outlook event from the Shoot Calendar. scope "all" edits the series (times: same day
+ * only, shifted like the occurrence). Outlook emails guests about changes itself.
+ */
+export async function updateOutlookEvent(
+  businessId: string,
+  calendarId: string,
+  eventId: string,
+  update: ExternalEventUpdate,
+  timeZone: string
+): Promise<void> {
+  const access = await getOutlookAccess(businessId);
+  if (!access.ok) throw new Error("Outlook is not connected. Reconnect it in Settings.");
+  const occurrence = await getOutlookEventRaw(access.token, calendarId, eventId);
+  const masterId = update.scope === "all" ? occurrence.seriesMasterId : null;
+  const target = masterId ? await getOutlookEventRaw(access.token, calendarId, masterId) : occurrence;
+
+  const body: Record<string, unknown> = {};
+  if (update.title !== undefined) body.subject = update.title;
+  if (update.description !== undefined) body.body = { contentType: "text", content: update.description };
+  if (update.location !== undefined) body.location = { displayName: update.location };
+
+  if (update.start && update.end) {
+    const occStart = graphUtcToIso(occurrence.start?.dateTime) ?? update.start;
+    if (masterId) {
+      if (Boolean(update.allDay) !== Boolean(occurrence.isAllDay)) {
+        throw new Error("Change all-day on one occurrence at a time, or in Outlook.");
+      }
+      const sameDay = update.allDay
+        ? update.start === (occurrence.start?.dateTime ?? "").slice(0, 10)
+        : zonedDayKey(occStart, timeZone) === zonedDayKey(update.start, timeZone);
+      if (!sameDay) throw new Error("Move one occurrence at a time. Moving the whole series to another day is done in Outlook.");
+      if (update.allDay) {
+        const days = Math.round((Date.parse(`${update.end}T00:00:00Z`) - Date.parse(`${update.start}T00:00:00Z`)) / 86_400_000);
+        const seriesDate = (target.start?.dateTime ?? "").slice(0, 10) || update.start;
+        body.end = { dateTime: `${addDaysToDate(seriesDate, days)}T00:00:00`, timeZone: "UTC" };
+      } else {
+        const shifted = shiftSeriesTimes(graphUtcToIso(target.start?.dateTime) ?? occStart, occStart, update.start, update.end);
+        body.start = { dateTime: graphUtc(shifted.start), timeZone: "UTC" };
+        body.end = { dateTime: graphUtc(shifted.end), timeZone: "UTC" };
+      }
+    } else if (update.allDay) {
+      // All-day events are midnight to midnight on the calendar's dates.
+      body.isAllDay = true;
+      body.start = { dateTime: `${update.start}T00:00:00`, timeZone: "UTC" };
+      body.end = { dateTime: `${update.end}T00:00:00`, timeZone: "UTC" };
+    } else {
+      body.isAllDay = false;
+      body.start = { dateTime: graphUtc(update.start), timeZone: "UTC" };
+      body.end = { dateTime: graphUtc(update.end), timeZone: "UTC" };
+    }
+  }
+
+  if (update.attendees) body.attendees = mergeOutlookAttendees(target.attendees, update.attendees);
+  if (update.meeting === "add") {
+    const cal = await graph(access.token, `/me/calendars/${encodeURIComponent(unprefixId(calendarId))}?$select=defaultOnlineMeetingProvider`);
+    const provider = cal.ok ? ((await cal.json()) as { defaultOnlineMeetingProvider?: string }).defaultOnlineMeetingProvider : null;
+    if (!provider || provider === "unknown") throw new Error("This Outlook account can't add online meetings.");
+    body.isOnlineMeeting = true;
+    body.onlineMeetingProvider = provider;
+  } else if (update.meeting === "remove") {
+    throw new Error("Outlook doesn't allow removing an online meeting once it's added.");
+  }
+
+  const res = await graph(access.token, outlookEventPath(calendarId, masterId || eventId), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await outlookEditError(res, "save the change");
+}
+
+/** Deletes an Outlook event (or its series). Guests get a cancellation when notify is on. */
+export async function deleteOutlookEventFromCalendar(
+  businessId: string,
+  calendarId: string,
+  eventId: string,
+  opts: { scope: "this" | "all"; notify: boolean }
+): Promise<void> {
+  const access = await getOutlookAccess(businessId);
+  if (!access.ok) throw new Error("Outlook is not connected. Reconnect it in Settings.");
+  const occurrence = await getOutlookEventRaw(access.token, calendarId, eventId);
+  const targetId = opts.scope === "all" && occurrence.seriesMasterId ? occurrence.seriesMasterId : eventId;
+  const hasGuests = (occurrence.attendees ?? []).some((a) => a.type !== "resource");
+  // The organizer cancelling a meeting with guests: "cancel" sends them the cancellation.
+  const res =
+    opts.notify && hasGuests && occurrence.isOrganizer !== false
+      ? await graph(access.token, `${outlookEventPath(calendarId, targetId)}/cancel`, {
+          method: "POST",
+          body: JSON.stringify({ comment: "" }),
+        })
+      : await graph(access.token, outlookEventPath(calendarId, targetId), { method: "DELETE" });
+  if (!res.ok && res.status !== 404) throw await outlookEditError(res, "delete the event");
 }

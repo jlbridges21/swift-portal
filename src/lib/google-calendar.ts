@@ -19,9 +19,17 @@ import { getPlatformRootDomain } from "@/lib/site-metadata";
 import { getBusinessPortalOriginById, isPlatformApexHostname } from "@/lib/portal-url";
 import { decryptCalendarSecret, encryptCalendarSecret } from "@/lib/google-calendar-crypto";
 import { isSafeCssColor } from "@/lib/brand-color";
-import { googleEventDetails, type ExternalEventDetails } from "@/lib/external-event-details";
+import {
+  addDaysToDate,
+  googleEventDetails,
+  mergeGoogleAttendees,
+  shiftSeriesTimes,
+  type ExternalEventDetails,
+  type ExternalEventUpdate,
+} from "@/lib/external-event-details";
 import {
   listGoogleEvents,
+  zonedDayKey,
   resolveReadCalendarIds,
   validateReadCalendarSelection,
   type ExternalCalendarEvent,
@@ -1386,7 +1394,9 @@ export async function loadViewerGoogleWindow(
             syncToken: null,
             transport: timedFetch,
           });
-          events.push(...result.events);
+          // Read-only calendars (holidays, shared "see all details"): nothing on them is editable.
+          const writable = !calendar?.accessRole || calendar.accessRole === "owner" || calendar.accessRole === "writer";
+          events.push(...(writable ? result.events : result.events.map((e) => ({ ...e, editable: false }))));
           if (result.degraded) degraded = true;
           loadedCalendarIds.push(id);
         } catch {
@@ -1499,6 +1509,46 @@ export async function disconnectGoogleCalendar(businessId: string): Promise<{
   return { revoked, revokeStatus };
 }
 
+const GOOGLE_EVENTS_API = "https://www.googleapis.com/calendar/v3/calendars";
+
+function googleEventUrl(calendarId: string, eventId: string): URL {
+  return new URL(`${GOOGLE_EVENTS_API}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
+}
+
+/** Google's error → a sentence the owner can act on. */
+async function googleEditError(res: Response, action: string): Promise<Error> {
+  const text = await res.text().catch(() => "");
+  console.error(`[google-calendar] ${action} failed`, { status: res.status, error: redact(text.slice(0, 300)) });
+  if (res.status === 403) return new Error("Google doesn't let this account change that event (it's an invitation or on a read-only calendar).");
+  if (res.status === 404 || res.status === 410) return new Error("This event no longer exists in Google Calendar. Refresh and try again.");
+  if (res.status === 400) {
+    let message = "";
+    try {
+      message = (JSON.parse(text) as { error?: { message?: string } }).error?.message ?? "";
+    } catch {
+      // not JSON
+    }
+    return new Error(message ? `Google rejected the change: ${redact(message).slice(0, 160)}` : "Google rejected the change.");
+  }
+  return new Error(`Couldn't ${action} in Google Calendar. Try again.`);
+}
+
+type GoogleEditableEvent = {
+  id?: string;
+  recurringEventId?: string;
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
+  attendees?: { email?: string; resource?: boolean; optional?: boolean; organizer?: boolean }[];
+};
+
+async function getGoogleEventRaw(token: string, calendarId: string, eventId: string, fields: string): Promise<GoogleEditableEvent> {
+  const url = googleEventUrl(calendarId, eventId);
+  url.searchParams.set("fields", fields);
+  const res = await timedFetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw await googleEditError(res, "load the event");
+  return (await res.json()) as GoogleEditableEvent;
+}
+
 /** Full details for one Google event on the Shoot Calendar (owner only; nothing stored). */
 export async function getGoogleEventDetails(
   businessId: string,
@@ -1507,17 +1557,119 @@ export async function getGoogleEventDetails(
 ): Promise<ExternalEventDetails> {
   const auth = await accessTokenFor(businessId, timedFetch);
   if (!auth.ok) throw new Error("Google Calendar is not connected.");
-  const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
-  );
+  const url = googleEventUrl(calendarId, eventId);
   url.searchParams.set(
     "fields",
-    "description,location,hangoutLink,recurringEventId,transparency,visibility,organizer,creator,attendees,conferenceData(conferenceSolution/name,entryPoints),attachments(title,fileUrl)"
+    "description,location,hangoutLink,recurringEventId,transparency,visibility,organizer,creator,attendees,conferenceData(conferenceSolution/name,entryPoints),attachments(title,fileUrl),start,end,guestsCanModify,eventType,locked"
   );
-  const res = await timedFetch(url.toString(), { headers: { Authorization: `Bearer ${auth.token}` } });
+  const listUrl = `https://www.googleapis.com/calendar/v3/users/me/calendarList/${encodeURIComponent(calendarId)}?fields=accessRole`;
+  const [res, role] = await Promise.all([
+    timedFetch(url.toString(), { headers: { Authorization: `Bearer ${auth.token}` } }),
+    timedFetch(listUrl, { headers: { Authorization: `Bearer ${auth.token}` } })
+      .then(async (r) => (r.ok ? ((await r.json()) as { accessRole?: string }).accessRole ?? null : null))
+      .catch(() => null),
+  ]);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(redact(text.slice(0, 300)) || `events.get ${res.status}`);
   }
-  return googleEventDetails(await res.json());
+  // Unknown role (lookup failed): let Google decide on save.
+  const writable = role === null || role === "owner" || role === "writer";
+  return googleEventDetails(await res.json(), { calendarId, writable });
+}
+
+/**
+ * Edits a Google event from the Shoot Calendar. scope "all" edits the whole series of a
+ * repeating event (times: same day only, shifted like the occurrence). Guests are emailed when
+ * notify is on and the event has guests (Google's sendUpdates).
+ */
+export async function updateGoogleEvent(
+  businessId: string,
+  calendarId: string,
+  eventId: string,
+  update: ExternalEventUpdate,
+  timeZone: string
+): Promise<void> {
+  const auth = await accessTokenFor(businessId, timedFetch);
+  if (!auth.ok) throw new Error("Google Calendar is not connected. Reconnect it in Settings.");
+  const fields = "id,recurringEventId,start,end,attendees";
+  const occurrence = await getGoogleEventRaw(auth.token, calendarId, eventId, fields);
+  const series = update.scope === "all" && occurrence.recurringEventId;
+  const target = series ? await getGoogleEventRaw(auth.token, calendarId, occurrence.recurringEventId!, fields) : occurrence;
+  const targetId = series ? occurrence.recurringEventId! : eventId;
+
+  const body: Record<string, unknown> = {};
+  if (update.title !== undefined) body.summary = update.title;
+  if (update.description !== undefined) body.description = update.description;
+  if (update.location !== undefined) body.location = update.location;
+
+  if (update.start && update.end) {
+    const wasAllDay = Boolean(occurrence.start?.date && !occurrence.start?.dateTime);
+    if (update.allDay) {
+      if (series) {
+        if (!wasAllDay) throw new Error("Switch a repeating event to all day one occurrence at a time, or in Google Calendar.");
+        if (update.start !== occurrence.start?.date) throw new Error("Move one occurrence at a time. Moving the whole series to another day is done in Google Calendar.");
+        const days = Math.round((Date.parse(`${update.end}T00:00:00Z`) - Date.parse(`${update.start}T00:00:00Z`)) / 86_400_000);
+        const seriesStart = target.start?.date ?? update.start;
+        body.end = { date: addDaysToDate(seriesStart, days) };
+      } else {
+        body.start = { date: update.start, dateTime: null, timeZone: null };
+        body.end = { date: update.end, dateTime: null, timeZone: null };
+      }
+    } else {
+      const zone = occurrence.start?.timeZone || timeZone;
+      if (series) {
+        if (wasAllDay) throw new Error("Give a repeating all-day event a time one occurrence at a time, or in Google Calendar.");
+        const occStart = occurrence.start?.dateTime ?? "";
+        if (zonedDayKey(occStart, timeZone) !== zonedDayKey(update.start, timeZone)) {
+          throw new Error("Move one occurrence at a time. Moving the whole series to another day is done in Google Calendar.");
+        }
+        const shifted = shiftSeriesTimes(target.start?.dateTime ?? occStart, occStart, update.start, update.end);
+        body.start = { dateTime: shifted.start, timeZone: target.start?.timeZone || zone };
+        body.end = { dateTime: shifted.end, timeZone: target.end?.timeZone || zone };
+      } else {
+        body.start = { dateTime: update.start, timeZone: zone, date: null };
+        body.end = { dateTime: update.end, timeZone: occurrence.end?.timeZone || zone, date: null };
+      }
+    }
+  }
+
+  if (update.attendees) body.attendees = mergeGoogleAttendees(target.attendees, update.attendees);
+  if (update.meeting === "add") {
+    body.conferenceData = {
+      createRequest: { requestId: randomBytes(12).toString("hex"), conferenceSolutionKey: { type: "hangoutsMeet" } },
+    };
+  } else if (update.meeting === "remove") {
+    body.conferenceData = null;
+  }
+
+  const url = googleEventUrl(calendarId, targetId);
+  url.searchParams.set("sendUpdates", update.notify ? "all" : "none");
+  url.searchParams.set("conferenceDataVersion", "1");
+  const res = await timedFetch(url.toString(), {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await googleEditError(res, "save the change");
+}
+
+/** Deletes a Google event (or its whole series). Guests get a cancellation when notify is on. */
+export async function deleteGoogleEventFromCalendar(
+  businessId: string,
+  calendarId: string,
+  eventId: string,
+  opts: { scope: "this" | "all"; notify: boolean }
+): Promise<void> {
+  const auth = await accessTokenFor(businessId, timedFetch);
+  if (!auth.ok) throw new Error("Google Calendar is not connected. Reconnect it in Settings.");
+  let targetId = eventId;
+  if (opts.scope === "all") {
+    const occurrence = await getGoogleEventRaw(auth.token, calendarId, eventId, "id,recurringEventId");
+    if (occurrence.recurringEventId) targetId = occurrence.recurringEventId;
+  }
+  const url = googleEventUrl(calendarId, targetId);
+  url.searchParams.set("sendUpdates", opts.notify ? "all" : "none");
+  const res = await timedFetch(url.toString(), { method: "DELETE", headers: { Authorization: `Bearer ${auth.token}` } });
+  if (!res.ok && res.status !== 410 && res.status !== 404) throw await googleEditError(res, "delete the event");
 }
