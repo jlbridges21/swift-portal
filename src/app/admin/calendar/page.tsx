@@ -10,7 +10,7 @@ import {
   type CalendarShootsResult,
   type CalendarGoogleResult,
 } from "@/components/admin/shoot-calendar";
-import type { CalendarCreateProject } from "@/components/admin/shoot-calendar-mobile";
+import type { CalendarCreateProject, CalendarService } from "@/components/admin/shoot-calendar-mobile";
 import { isOwnerAdmin, staffCan, visibleProjectIdsFor } from "@/lib/staff-access";
 import { getAppSettings } from "@/lib/app-settings";
 import {
@@ -224,23 +224,48 @@ export default async function AdminCalendarPage() {
     })
     .catch(() => ({}));
 
+  // Services for the new-event form (picking one sets the event length).
+  const servicesSource: Promise<CalendarService[]> = Promise.resolve(
+    db.from("business_services")
+    .select("id, name, duration_minutes, is_active")
+    .order("display_order", { ascending: true })
+    .then(
+      ({ data, error }) =>
+        error
+          ? []
+          : (data ?? [])
+              .filter((r) => r.is_active !== false)
+              .map((r) => ({
+                id: r.id as string,
+                name: (r.name as string) || "Service",
+                durationMinutes: Number(r.duration_minutes ?? 60) || 60,
+              })),
+      (): CalendarService[] => []
+    )
+  );
+
   const createProjectsSource: Promise<CalendarCreateProject[]> = canCreateShoot
     ? (async () => {
         // Deleted projects can't be booked (the booking API refuses them), so don't offer them.
         let projectQuery = db
           .from("projects")
-          .select("id, project_name")
+          .select("id, project_name, property_address, clients(name, full_name)")
           .is("deleted_at", null)
           .order("project_name")
-          .limit(100);
+          .limit(300);
         if (projectIds !== "all") {
           projectQuery = projectQuery.in("id", projectIds.length === 0 ? NO_MATCH : projectIds);
         }
         const { data: projectRows } = await projectQuery;
-        return (projectRows ?? []).map((row) => ({
-          id: row.id as string,
-          name: (row.project_name as string) || "Untitled project",
-        }));
+        return (projectRows ?? []).map((row) => {
+          const client = (row as { clients?: { name?: string | null; full_name?: string | null } | null }).clients;
+          return {
+            id: row.id as string,
+            name: (row.project_name as string) || "Untitled project",
+            clientName: client?.full_name || client?.name || null,
+            address: ((row as { property_address?: string | null }).property_address || "").trim() || null,
+          };
+        });
       })().catch(() => [])
     : Promise.resolve([]);
 
@@ -291,6 +316,8 @@ export default async function AdminCalendarPage() {
           canLoadExternal={googleActive}
           canLoadOutlook={owner && outlookConnected}
           isOwner={owner}
+          servicesSource={servicesSource}
+          viewerUserId={profile.id}
           canChooseColors={owner}
           calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}

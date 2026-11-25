@@ -97,6 +97,8 @@ export async function confirmAppointment(
     actor: BookingActor;
     holdId?: string | null;
     override?: { reason: string } | null;
+    /** Manual bookings from the Shoot Calendar may set their own length (resize / custom end). */
+    durationMinutes?: number | null;
   }
 ): Promise<ConfirmResult> {
   if (!ctx.schemaReady) {
@@ -114,6 +116,14 @@ export async function confirmAppointment(
   const override = input.source === "manual" && input.override?.reason?.trim() ? input.override : null;
   if (!userId) {
     const first = check.ranked[0];
+    // An owner/admin override from the calendar works even when nobody is "available"
+    // (no bookable team member ranked): it goes to the chosen photographer, or the booker.
+    if (override && !first && input.actor.kind === "business") {
+      userId = input.userId ?? input.actor.userId ?? null;
+    }
+  }
+  if (!userId) {
+    const first = check.ranked[0];
     if (!override || !first) {
       const violations = (first?.violations ?? []) as SlotViolation[];
       return {
@@ -128,10 +138,17 @@ export async function confirmAppointment(
     userId = input.userId ?? first.userId;
   }
 
-  const endMs = input.startMs + facts.durationMinutes * MINUTE;
+  const customMinutes =
+    input.source === "manual" && input.durationMinutes && input.durationMinutes >= 5 && input.durationMinutes <= 24 * 60
+      ? Math.round(input.durationMinutes)
+      : null;
+  const durationMinutes = customMinutes ?? facts.durationMinutes;
+  const endMs = input.startMs + durationMinutes * MINUTE;
   let proposalId: string | null = null;
 
-  if (override && !check.chosen) {
+  // Override path: a conflict was overridden, or a calendar booking set its own length (the
+  // rule check ran on the service length, so the database constraint could refuse the custom end).
+  if (override && (!check.chosen || customMinutes !== null)) {
     // Admin override: explicit, audited, excluded from the double-booking constraint.
     await ctx.db
       .from("shoot_proposals")
@@ -146,7 +163,7 @@ export async function confirmAppointment(
         proposed_by: "admin",
         proposed_at: new Date(input.startMs).toISOString(),
         end_at: new Date(endMs).toISOString(),
-        duration_minutes: facts.durationMinutes,
+        duration_minutes: durationMinutes,
         buffer_before_minutes: facts.bufferBefore,
         buffer_after_minutes: facts.bufferAfter,
         assigned_user_id: userId,
@@ -162,13 +179,16 @@ export async function confirmAppointment(
       .single();
     if (error || !data) return { ok: false, code: "error", message: error?.message ?? "Could not save the shoot." };
     proposalId = data.id as string;
-    await logProjectActivity("shoot_override", `Admin override: shoot booked despite conflicts (${whenLabel(ctx, input.startMs)})`, {
-      businessId: ctx.businessId,
-      projectId: facts.projectId,
-      userId: input.actor.userId,
-      visibility: "admin",
-      metadata: { reason: override.reason, violations: check.ranked.find((r) => r.userId === userId)?.violations ?? [] },
-    });
+    const overridden = check.chosen ? [] : (check.ranked.find((r) => r.userId === userId)?.violations ?? []);
+    if (!check.chosen) {
+      await logProjectActivity("shoot_override", `Admin override: shoot booked despite conflicts (${whenLabel(ctx, input.startMs)})`, {
+        businessId: ctx.businessId,
+        projectId: facts.projectId,
+        userId: input.actor.userId,
+        visibility: "admin",
+        metadata: { reason: override.reason, violations: overridden },
+      });
+    }
   } else {
     const { data, error } = await ctx.db.raw.rpc("confirm_instant_booking", {
       p_business_id: ctx.businessId,

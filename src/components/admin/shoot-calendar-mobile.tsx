@@ -11,7 +11,16 @@ import type { CalendarShoot } from "@/components/admin/shoot-calendar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export type CalendarCreateProject = { id: string; name: string };
+export type CalendarCreateProject = {
+  id: string;
+  name: string;
+  /** Shown in the new-event form: the event's client and location come from the project. */
+  clientName?: string | null;
+  address?: string | null;
+};
+
+/** Services for the new-event form: picking one sets the event length. */
+export type CalendarService = { id: string; name: string; durationMinutes: number };
 
 type MobileView = "schedule" | "day" | "three" | "week" | "month";
 

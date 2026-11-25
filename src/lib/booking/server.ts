@@ -9,6 +9,7 @@ import { getAppSettings, type AppSettings } from "@/lib/app-settings";
 import { getGoogleCalendarAccess, getMemberGoogleAccess, listMemberConnections, resolveBusinessTimeZone } from "@/lib/google-calendar";
 import { listGoogleEvents } from "@/lib/google-calendar-pull";
 import { loadOutlookBusy } from "@/lib/outlook-calendar";
+import { loadCalendarEventBusy } from "@/lib/calendar-events";
 import { timeOffToBusy } from "@/lib/staff-account-shared";
 import { loadProjectServiceLinks } from "@/lib/project-services";
 import {
@@ -485,9 +486,11 @@ async function prepare(
   const outlookBusyPromise = filtered.some((m) => m.role === "owner")
     ? loadOutlookBusy(ctx.businessId, fromMs - DAY, toMs + DAY)
     : Promise.resolve(null);
-  const [busy, memberBusy] = await Promise.all([
+  const [busy, memberBusy, eventBusy] = await Promise.all([
     loadGoogleBusy(ctx, calendarIds, fromMs - DAY, toMs + DAY),
     loadMemberBusy(ctx, filtered.map((m) => m.userId), fromMs - DAY, toMs + DAY),
+    // Calendar events (v139): personal blocks created on the Shoot Calendar.
+    loadCalendarEventBusy(ctx.businessId, filtered.map((m) => m.userId), fromMs - DAY, toMs + DAY),
   ]);
   const outlookBusy = await outlookBusyPromise;
 
@@ -545,7 +548,7 @@ async function prepare(
           address: a.address,
         })
       ),
-      busy: [...googleBusy, ...(outlook?.intervals ?? []), ...timeOffBusy, ...holdBusy],
+      busy: [...googleBusy, ...(outlook?.intervals ?? []), ...(eventBusy.get(member.userId) ?? []), ...timeOffBusy, ...holdBusy],
       weights: member.weights,
       fitScore: fit.score,
       // Fail closed: if someone's calendar can't be read, they aren't offered.

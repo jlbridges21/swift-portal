@@ -930,8 +930,12 @@ export async function loadOutlookBusy(businessId: string, fromMs: number, toMs: 
     const access = await getOutlookAccess(businessId);
     if (!access.ok) return { active: true, intervals: [], failed: true };
     const db = await createTenantServiceClient(businessId);
-    const { data: own } = await db.from("outlook_calendar_events").select("event_id").not("event_id", "is", null);
-    const ownIds = new Set((own ?? []).map((r) => r.event_id as string));
+    const [{ data: own }, eventIds] = await Promise.all([
+      db.from("outlook_calendar_events").select("event_id").not("event_id", "is", null),
+      ownCalendarEventOutlookIds(businessId),
+    ]);
+    // Shoots and calendar events (v139) already block in ShootPortal: don't count their copies.
+    const ownIds = new Set([...(own ?? []).map((r) => r.event_id as string), ...eventIds]);
     const fromIso = new Date(fromMs).toISOString();
     const toIso = new Date(toMs).toISOString();
     let failed = false;
@@ -1109,15 +1113,16 @@ export async function loadOutlookDisplayWindow(
     if (access.error === "not_connected") return empty;
     return { ...empty, connected: true, status: "needs_reconnect", degraded: true };
   }
-  const [calendars, prefs, ownRows] = await Promise.all([
+  const [calendars, prefs, ownRows, eventIds] = await Promise.all([
     listOutlookCalendars(access.token),
     readDisplayPrefs(businessId),
     createTenantServiceClient(businessId).then((db) =>
       db.from("outlook_calendar_events").select("event_id").not("event_id", "is", null)
     ),
+    ownCalendarEventOutlookIds(businessId),
   ]);
-  // ShootPortal's own shoots are already on the grid: don't show their Outlook copies too.
-  const ownIds = new Set(((ownRows.data ?? []) as { event_id: string }[]).map((r) => r.event_id));
+  // ShootPortal's own shoots and calendar events are already on the grid: don't show their Outlook copies too.
+  const ownIds = new Set([...((ownRows.data ?? []) as { event_id: string }[]).map((r) => r.event_id), ...eventIds]);
   const hiddenRaw = prefs.hidden ?? calendars.filter((c) => !c.canEdit).map((c) => c.id);
   const colors: Record<string, string> = {};
   for (const [id, color] of Object.entries(prefs.colors)) colors[prefixId(id)] = color;
@@ -1176,4 +1181,16 @@ export async function setOutlookDisplayColor(businessId: string, key: string, co
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(next)) out[prefixId(k)] = v;
   return out;
+}
+
+/** Outlook ids of ShootPortal calendar events (v139). Empty before the migration. */
+async function ownCalendarEventOutlookIds(businessId: string): Promise<string[]> {
+  try {
+    const db = await createTenantServiceClient(businessId);
+    const { data, error } = await db.from("calendar_events").select("outlook_event_id").not("outlook_event_id", "is", null);
+    if (error) return [];
+    return ((data ?? []) as { outlook_event_id: string }[]).map((r) => r.outlook_event_id);
+  } catch {
+    return [];
+  }
 }

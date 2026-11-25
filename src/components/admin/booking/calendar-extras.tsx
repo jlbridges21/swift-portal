@@ -73,6 +73,7 @@ export function BookShootDialog({
   timeZone,
   team,
   onBooked,
+  calendarOverride = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -80,6 +81,8 @@ export function BookShootDialog({
   timeZone: string;
   team: { userId: string; name: string }[];
   onBooked: () => void;
+  /** Owner/admin on the Shoot Calendar: book any time, overriding availability. */
+  calendarOverride?: boolean;
 }) {
   const [projectId, setProjectId] = useState("");
   return (
@@ -95,7 +98,15 @@ export function BookShootDialog({
           />
         </label>
         {projectId ? (
-          <SchedulePanel key={projectId} projectId={projectId} timeZone={timeZone} team={team} canOverride onDone={onBooked} />
+          <SchedulePanel
+            key={projectId}
+            projectId={projectId}
+            timeZone={timeZone}
+            team={team}
+            canOverride
+            calendarOverride={calendarOverride}
+            onDone={onBooked}
+          />
         ) : (
           <p className="text-sm text-muted">
             Shoots are booked with the same rules clients see: working hours, buffers, drive time, daily limits and your calendars.
