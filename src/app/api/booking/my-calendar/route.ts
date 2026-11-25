@@ -133,10 +133,17 @@ export async function DELETE() {
 
   const { data: tokenRow } = await db
     .from("team_google_calendar_connections")
-    .select("refresh_token_ciphertext")
+    .select("refresh_token_ciphertext, connected_email")
     .eq("user_id", ctx.profile.id)
     .maybeSingle();
-  if (tokenRow?.refresh_token_ciphertext) {
+  // Google revokes the whole sign-in for that Google account, not just this token. When the
+  // business connection (Settings → Integrations) uses the same Google account, revoking here
+  // would silently break it too, so only forget this personal connection in that case.
+  const { data: businessRow } = await db.from("google_calendar_connections").select("connected_email").maybeSingle();
+  const personalEmail = String(tokenRow?.connected_email || "").trim().toLowerCase();
+  const sharesBusinessGrant =
+    Boolean(personalEmail) && personalEmail === String(businessRow?.connected_email || "").trim().toLowerCase();
+  if (tokenRow?.refresh_token_ciphertext && !sharesBusinessGrant) {
     await revokeGoogleToken(decryptCalendarSecret(tokenRow.refresh_token_ciphertext as string)).catch(() => null);
   }
   const { error } = await db.from("team_google_calendar_connections").delete().eq("user_id", ctx.profile.id);

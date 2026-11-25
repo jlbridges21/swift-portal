@@ -367,7 +367,7 @@ export async function listAccountCalendars(
     const res = await transport(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(redact(text || `calendarList ${res.status}`));
+      throw Object.assign(new Error(redact(text || `calendarList ${res.status}`)), { status: res.status });
     }
     const json = (await res.json()) as {
       nextPageToken?: string;
@@ -1340,7 +1340,14 @@ export async function loadViewerGoogleWindow(
     let calendars: AccountCalendar[] = [];
     try {
       calendars = await listAccountCalendars(auth.token, timedFetch);
-    } catch {
+    } catch (err) {
+      // 401: Google no longer accepts this connection (access removed in the Google account,
+      // or revoked). Treat it as disconnected — mark it for reconnect instead of showing
+      // stale calendars with a "didn't load" warning on every visit.
+      if ((err as { status?: number }).status === 401) {
+        await markNeedsReconnect(businessId, "Google access was removed. Reconnect Google Calendar.").catch(() => null);
+        return empty(timeZone, false, false);
+      }
       degraded = true;
       // The list is unavailable: fall back to the stored read calendars so events still show.
       calendars = resolveReadCalendarIds(row.read_calendar_ids, row.calendar_id).map((id) => ({
@@ -1467,7 +1474,16 @@ export async function disconnectGoogleCalendar(businessId: string): Promise<{
   const row = await readConnection(businessId);
   let revoked = false;
   let revokeStatus: number | null = null;
-  if (row) {
+  // Google revokes the whole sign-in for that Google account. If a team member's personal
+  // calendar (My calendars) uses the same Google account, revoking would break it too.
+  let sharedWithMember = false;
+  if (row?.connected_email) {
+    const db = await createTenantServiceClient(businessId);
+    const { data: members } = await db.from("team_google_calendar_connections").select("connected_email");
+    const email = row.connected_email.trim().toLowerCase();
+    sharedWithMember = (members ?? []).some((m) => String(m.connected_email || "").trim().toLowerCase() === email);
+  }
+  if (row && !sharedWithMember) {
     try {
       const refresh = decryptCalendarSecret(row.refresh_token_ciphertext);
       const result = await revokeGoogleToken(refresh);
