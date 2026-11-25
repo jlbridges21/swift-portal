@@ -160,6 +160,8 @@ interface ShootCalendarProps {
   canLoadExternal?: boolean;
   /** Owner: show the business's Outlook calendars (read-only) beside Google ones. */
   canLoadOutlook?: boolean;
+  /** Owner: "Connect calendar" manages the business connections (same as Settings → Integrations). */
+  isOwner?: boolean;
   canChooseColors?: boolean;
   calendarColors?: ViewerCalendarColorPrefs;
   businessTimeZone?: string;
@@ -817,6 +819,7 @@ export function ShootCalendar({
   createProjectsSource,
   canLoadExternal = false,
   canLoadOutlook = false,
+  isOwner = false,
   canChooseColors = false,
   calendarColors: initialColors = {},
   businessTimeZone = "America/New_York",
@@ -1821,7 +1824,7 @@ export function ShootCalendar({
           </div>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
             <div className="flex flex-wrap items-center gap-2">
-              <CalendarConnectionsButton className="min-h-11" />
+              <CalendarConnectionsButton className="min-h-11" isOwner={isOwner} />
               {canCreateShoot ? (
                 <Button type="button" variant="accent" className="min-h-11" onClick={() => setBookOpen(true)}>
                   <Plus className="h-4 w-4" /> Book shoot

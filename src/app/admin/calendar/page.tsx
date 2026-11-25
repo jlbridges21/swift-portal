@@ -1,6 +1,5 @@
 import { addDays, endOfMonth, startOfMonth, subDays } from "date-fns";
 import { Header, PageHeader } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/admin-access";
 import { getProjectHeroPosterUrlMap } from "@/lib/cover";
 import { after } from "next/server";
@@ -23,7 +22,6 @@ import {
 } from "@/lib/google-calendar";
 import { externalEventsVisibleTo } from "@/lib/google-calendar-pull";
 import { retryOutlookAttentionSyncs } from "@/lib/outlook-calendar";
-import Link from "next/link";
 import { getBusinessOwnerUserId } from "@/lib/staff";
 import { loadTeam, resolveMember } from "@/lib/booking/team";
 import { computeCalendarTravelLegs, type CalendarLeg } from "@/lib/booking/calendar-travel";
@@ -269,20 +267,13 @@ export default async function AdminCalendarPage() {
     <div className="min-h-screen bg-background">
       <Header variant="dashboard" userRole={profile.role === "staff" ? "staff" : "admin"} />
       <main className="app-page app-page-wide mx-auto flex min-h-0 min-w-0 max-w-none flex-col px-3 py-4 sm:px-4 lg:h-[calc(var(--app-height)-4rem)] lg:overflow-hidden lg:px-6">
-        <PageHeader title="Shoot Calendar" className="mb-3">
-          {owner && (gcalStatus === "needs_reconnect" || (gcalStatus === "disconnected" && !outlookConnected)) ? (
-            <Link href="/admin/settings#settings-integrations">
-              <Button variant="outline" size="sm">
-                {gcalStatus === "needs_reconnect" ? "Reconnect Google Calendar" : "Connect Google Calendar"}
-              </Button>
-            </Link>
-          ) : null}
-        </PageHeader>
+        {/* Connecting calendars lives in the "Connect calendar" / "My calendars" button below. */}
+        <PageHeader title="Shoot Calendar" className="mb-3" />
 
         {owner && gcalStatus === "needs_reconnect" ? (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             Google Calendar is disconnected{gcalError ? ` (${gcalError})` : ""}. Shoots stay in
-            ShootPortal. Reconnect from Settings → Integrations to resume sync.
+            ShootPortal. Reconnect with My calendars below, or in Settings → Integrations, to resume sync.
           </div>
         ) : null}
 
@@ -293,6 +284,7 @@ export default async function AdminCalendarPage() {
           createProjectsSource={createProjectsSource}
           canLoadExternal={googleActive}
           canLoadOutlook={owner && outlookConnected}
+          isOwner={owner}
           canChooseColors={owner}
           calendarColors={owner ? calendarColors : {}}
           businessTimeZone={businessTimeZone}
