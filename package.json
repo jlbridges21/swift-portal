@@ -16,6 +16,7 @@
     "test:portal-url": "npx tsx scripts/verify-portal-url.ts",
     "test:outlook-calendar": "npx tsx scripts/verify-outlook-calendar.ts",
     "test:external-event-details": "npx tsx scripts/verify-external-event-details.ts",
+    "test:team-pay": "npx tsx scripts/verify-team-pay.ts",
     "test:client-access-link": "npx tsx scripts/verify-client-access-link.ts",
     "test:preview-auth": "npx tsx scripts/verify-preview-auth-redirect.ts",
     "test:brand-theme": "npx tsx scripts/verify-brand-theme.ts",

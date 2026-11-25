@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   CreditCard,
   FolderKanban,
+  HandCoins,
   Handshake,
   Image as ImageIcon,
   LayoutDashboard,
@@ -23,6 +24,7 @@ import {
   Settings,
   Sparkles,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
@@ -93,6 +95,8 @@ function routePageTitle(pathname: string, isStaff: boolean): ShellPageTitle {
   if (p.startsWith("/admin/sites")) return { title: "Sites", description: "Manage your business and property websites." };
   if (p.startsWith("/admin/settings")) return { title: "Settings", description: "Business settings" };
   if (p.startsWith("/admin/leads")) return { title: "Leads" };
+  if (p.startsWith("/admin/team-pay")) return { title: "Team pay", description: "What you owe your team for their shoots" };
+  if (p.startsWith("/admin/my-pay")) return { title: "My pay", description: "What you've earned from your shoots" };
   if (p === "/admin/academy") return { title: "Academy", description: "Learn ShootPortal in short videos, then earn your certificate." };
   if (p.startsWith("/admin/academy/")) return { title: "Academy", crumbs: [{ label: "Academy", href: "/admin/academy" }] };
   if (p.startsWith("/partner")) return { title: "Partner", description: "ShootPortal Partner Program" };
@@ -162,8 +166,11 @@ export function AdminAppShell({
       items.push({ key: "partner", href: caps.partnerNavHref, label: "Partner", icon: Handshake, match: prefix("/partner") });
     }
     if (!isStaff) items.push({ key: "sites", href: "/admin/sites", label: "Sites", icon: PanelsTopLeft, match: prefix("/admin/sites") });
+    // Only for businesses that turned Team pay on (and have a team).
+    if (caps.showTeamPay) items.push({ key: "team-pay", href: "/admin/team-pay", label: "Team pay", icon: HandCoins, match: prefix("/admin/team-pay") });
+    if (caps.showMyPay) items.push({ key: "my-pay", href: "/admin/my-pay", label: "My pay", icon: Wallet, match: prefix("/admin/my-pay") });
     return items;
-  }, [isStaff, staffAreas, caps.showPartner, caps.partnerNavHref, messagesUnread]);
+  }, [isStaff, staffAreas, caps.showPartner, caps.partnerNavHref, caps.showTeamPay, caps.showMyPay, messagesUnread]);
 
   const homeHref = isStaff ? (staffAreas?.[0] ? STAFF_AREA_HOME[staffAreas[0]] : "/staff") : "/admin";
   const settingsHref = isStaff ? "/admin/account" : "/admin/settings";

@@ -12,6 +12,7 @@ export const SETTINGS_SECTION_IDS = [
   "services",
   "booking",
   "team",
+  "team_pay",
   "workflow",
   "notifications",
   "integrations",
@@ -121,6 +122,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     label: "Team & Availability",
     description: "Photographers, photos, working hours, service areas and how they appear to clients.",
     hashes: ["settings-team"],
+  },
+  {
+    id: "team_pay",
+    label: "Team pay",
+    description: "Pay plans, pay periods and what you owe each team member for their shoots.",
+    hashes: ["settings-team-pay"],
   },
   {
     id: "workflow",

@@ -123,6 +123,9 @@ export function adminPathArea(pathname: string): StaffArea | "adminOnly" | "shel
   if (pathname === "/admin" || pathname === "/admin/") return "shell";
   // A team member's own Settings (profile, availability, notifications): every active staff member.
   if (pathname === "/admin/account" || pathname.startsWith("/admin/account/")) return "shell";
+  // Team pay: a team member's own pay, and the review page (the pages check the permission).
+  if (pathname === "/admin/my-pay" || pathname.startsWith("/admin/my-pay/")) return "shell";
+  if (pathname === "/admin/team-pay" || pathname.startsWith("/admin/team-pay/")) return "shell";
   // ShootPortal Academy: training only (no business data), open to any active staff member.
   if (pathname === "/admin/academy" || pathname.startsWith("/admin/academy/")) return "shell";
   // Unknown /admin/* — deny staff by default

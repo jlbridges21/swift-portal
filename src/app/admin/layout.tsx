@@ -24,6 +24,7 @@ import { requestNowMs, subscribeSaveLabel, type OfferDisplay } from "@/lib/intro
 import type { Metadata, Viewport } from "next";
 import { appChromeThemeColor } from "@/lib/pwa/metadata";
 import { getUiExperience } from "@/lib/ui-rollout-server";
+import { teamPayVisibility } from "@/lib/team-pay/server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantContext();
@@ -56,7 +57,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const ownerTrialing = wantsTrialUi && subStatus === "trialing" && profile.role === "admin" && !tenant.impersonating;
   // Everything below depends only on profile + tenant, so it runs in one parallel batch
   // instead of a chain of round trips on every admin request.
-  const [settings, experience, caps, showTax, trialUi, activePlan] = await Promise.all([
+  const [settings, experience, caps, showTax, trialUi, activePlan, teamPay] = await Promise.all([
     getAppSettings(tenant.businessId),
     getUiExperience(profile),
     getCapabilities(),
@@ -70,8 +71,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           return null;
         })
       : Promise.resolve(null),
+    teamPayVisibility(tenant.businessId, profile.id),
   ]);
   const brand = getPortalBrandFromSettings(settings);
+  // Team pay stays out of sight unless the business turned it on and has a team.
+  const showTeamPay = teamPay.manage && (!isStaff || staffCan(profile, "teampay.approve"));
+  const showMyPay = teamPay.mine;
   // Force showPartner false when profile.role === 'staff'.
   const showPartner = isStaff ? false : showPartnerNavItem(caps);
   const navPartnerLabel = isStaff ? "" : partnerNavLabel(caps);
@@ -164,6 +169,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         userRole={headerRole}
         navCreate={navCreate}
         showTax={showTax}
+        showTeamPay={showTeamPay}
+        showMyPay={showMyPay}
       >
         <AdminShell
           showPartner={showPartner}

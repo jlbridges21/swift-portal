@@ -44,6 +44,7 @@ import { NewProjectSetupTab } from "@/components/admin/settings-tabs/new-project
 import { ServicesTab } from "@/components/admin/settings-tabs/services-tab";
 import { BookingTab } from "@/components/admin/settings-tabs/booking-tab";
 import { TeamAvailabilityTab } from "@/components/admin/booking/team-availability";
+import { TeamPaySettings } from "@/components/admin/team-pay/team-pay-settings";
 import { WorkflowTab } from "@/components/admin/settings-tabs/workflow-tab";
 import { NotificationsTab } from "@/components/admin/settings-tabs/notifications-tab";
 import { IntegrationsTab } from "@/components/admin/settings-tabs/integrations-tab";
@@ -606,6 +607,10 @@ export function AdminSettingsClient({
           <TeamAvailabilityTab />
         </SettingsPanel>
 
+        <SettingsPanel id="team_pay" active={section}>
+          <TeamPaySettings active={section === "team_pay"} />
+        </SettingsPanel>
+
         <SettingsPanel id="workflow" active={section}>
           <WorkflowTab />
         </SettingsPanel>
@@ -642,7 +647,7 @@ export function AdminSettingsClient({
           </div>
         )}
 
-        {section !== "staff" && section !== "team" ? (
+        {section !== "staff" && section !== "team" && section !== "team_pay" ? (
           <div
             className={cn(
               "sticky bottom-0 z-30 -mx-4 border-t border-border bg-card/95 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6 md:mx-0 md:rounded-2xl md:border md:px-5 md:py-3 max-md:[body[data-admin-pwa-nav]:not([data-admin-pwa-nav-off])_&]:bottom-[calc(var(--admin-pwa-nav-height)+env(safe-area-inset-bottom,0px))]",

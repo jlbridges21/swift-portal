@@ -26,6 +26,10 @@ type AdminCapabilitiesContextValue = {
   navCreate: AdminNavCreate;
   /** Owner/admin on a US business. Staff never receive this, even with every permission. */
   showTax: boolean;
+  /** Team pay is on and the business has a team: the owner (or staff who approve pay) see it. */
+  showTeamPay: boolean;
+  /** Team pay is on and this person is on a pay plan. */
+  showMyPay: boolean;
 };
 
 const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
@@ -38,6 +42,8 @@ const AdminCapabilitiesContext = createContext<AdminCapabilitiesContextValue>({
   userRole: null,
   navCreate: FULL_NAV_CREATE,
   showTax: false,
+  showTeamPay: false,
+  showMyPay: false,
 });
 
 export function AdminCapabilitiesProvider({
@@ -50,6 +56,8 @@ export function AdminCapabilitiesProvider({
   userRole = null,
   navCreate = FULL_NAV_CREATE,
   showTax = false,
+  showTeamPay = false,
+  showMyPay = false,
   children,
 }: {
   showPartner: boolean;
@@ -61,6 +69,8 @@ export function AdminCapabilitiesProvider({
   userRole?: "admin" | "staff" | "client" | null;
   navCreate?: AdminNavCreate;
   showTax?: boolean;
+  showTeamPay?: boolean;
+  showMyPay?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -75,6 +85,8 @@ export function AdminCapabilitiesProvider({
         userRole,
         navCreate,
         showTax,
+        showTeamPay,
+        showMyPay,
       }}
     >
       {children}

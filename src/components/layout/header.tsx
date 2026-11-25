@@ -159,6 +159,8 @@ export function Header({
   const adminMobileLinks = [
     ...adminLinks,
     ...(showPartnerLink ? [{ href: partnerHref, label: partnerLabel }] : []),
+    ...(caps.showTeamPay ? [{ href: "/admin/team-pay", label: "Team pay" }] : []),
+    ...(caps.showMyPay ? [{ href: "/admin/my-pay", label: "My pay" }] : []),
     { href: "/admin/academy", label: "Academy" },
     // Staff never see studio Settings; their own account Settings live at /admin/account.
     ...(!isStaff

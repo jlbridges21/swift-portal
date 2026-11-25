@@ -63,6 +63,8 @@ export const STAFF_PERMISSION_KEYS = [
   "money.create_send_estimates",
   "money.send_payment_links",
   "money.mark_paid",
+  // Team pay — default OFF
+  "teampay.approve",
   // Messages
   "messages.send",
   // Sharing — two separate permissions
@@ -84,6 +86,7 @@ export type StaffPermissionGroupId =
   | "video_review"
   | "scheduling"
   | "money"
+  | "teampay"
   | "messages"
   | "sharing";
 
@@ -287,6 +290,13 @@ export const STAFF_PERMISSION_META: StaffPermissionMeta[] = [
     default: false,
   },
   {
+    key: "teampay.approve",
+    label: "Review & approve team pay",
+    description: "See everyone's pay, fix shoot times, approve pay periods and mark them paid.",
+    group: "teampay",
+    default: false,
+  },
+  {
     key: "messages.send",
     label: "Send messages to clients",
     description: "Send portal messages to clients.",
@@ -317,6 +327,7 @@ export const STAFF_PERMISSION_GROUP_LABELS: Record<StaffPermissionGroupId, strin
   video_review: "Video review",
   scheduling: "Scheduling",
   money: "Money",
+  teampay: "Team pay",
   messages: "Messages",
   sharing: "Sharing",
 };
@@ -449,7 +460,7 @@ export const STAFF_PERMISSION_PRESETS: StaffPermissionPreset[] = [
     id: "full_except_money",
     label: "Full access except money",
     description: "Everything except estimates and payments.",
-    enabled: STAFF_PERMISSION_KEYS.filter((k) => !k.startsWith("money.")),
+    enabled: STAFF_PERMISSION_KEYS.filter((k) => !k.startsWith("money.") && !k.startsWith("teampay.")),
   },
 ];
 
