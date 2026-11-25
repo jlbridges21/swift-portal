@@ -44,7 +44,13 @@ export async function POST(request: Request) {
   }
   const action = String(body.action ?? "");
   const access = await resolveBookingAccess({ token: body.b, projectId: body.projectId });
-  if (!access) return NextResponse.json({ error: "This booking link is invalid or has expired." }, { status: 404 });
+  if (!access) {
+    // A booking link (client) vs. the app (team member picking a project, e.g. one since deleted).
+    const error = body.b
+      ? "This booking link is invalid or has expired."
+      : "This project can't be booked. It may have been deleted, or you don't have access to it.";
+    return NextResponse.json({ error }, { status: 404 });
+  }
 
   const ctx = await loadBookingContext(access.businessId);
   const facts = await loadProjectBookingFacts(ctx, access.projectId);
