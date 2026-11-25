@@ -530,6 +530,10 @@ export function RescheduleConfirmModal({
   saving,
   onCancel,
   onConfirm,
+  heading = "Reschedule Shoot?",
+  confirmLabel = "Confirm Reschedule",
+  savingLabel = "Rescheduling…",
+  body,
 }: {
   open: boolean;
   title: string;
@@ -539,12 +543,18 @@ export function RescheduleConfirmModal({
   saving: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  /** Same dialog for other confirmations (e.g. changing a shoot's length). */
+  heading?: string;
+  confirmLabel?: string;
+  savingLabel?: string;
+  /** Replaces the "Move … from … to …" sentence. */
+  body?: ReactNode;
 }) {
   return (
     <Modal
       open={open}
       onClose={onCancel}
-      title="Reschedule Shoot?"
+      title={heading}
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={saving} onClick={onCancel}>
@@ -552,17 +562,19 @@ export function RescheduleConfirmModal({
           </Button>
           <Button variant="accent" className="min-h-11 sm:min-h-10" disabled={saving} onClick={onConfirm}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {saving ? "Rescheduling…" : "Confirm Reschedule"}
+            {saving ? savingLabel : confirmLabel}
           </Button>
         </div>
       }
     >
       {open ? (
         <div className="space-y-3 text-sm text-muted">
-          <p>
-            Move <strong className="text-heading">{title}</strong> from <strong className="text-heading">{fromLabel}</strong> to{" "}
-            <strong className="text-heading">{toLabel}</strong>?
-          </p>
+          {body ?? (
+            <p>
+              Move <strong className="text-heading">{title}</strong> from <strong className="text-heading">{fromLabel}</strong> to{" "}
+              <strong className="text-heading">{toLabel}</strong>?
+            </p>
+          )}
           <p className="text-xs">{note}</p>
         </div>
       ) : null}

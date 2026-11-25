@@ -1607,7 +1607,7 @@ export function ShootCalendar({
   };
 
   /** Move/resize a calendar event immediately (no client is notified), like Google Calendar. */
-  async function patchCalendarEvent(event: ExternalCalendarEvent, startIso: string, endIso: string) {
+  async function patchCalendarEvent(event: ExternalCalendarEvent, startIso: string, endIso: string): Promise<boolean> {
     const id = event.id.slice(SP_EVENT_PREFIX.length);
     const before = calEvents;
     setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, start_at: startIso, end_at: endIso } : r)));
@@ -1621,10 +1621,11 @@ export function ShootCalendar({
       setCalEvents(before);
       const body = (await res?.json().catch(() => ({}))) as { error?: string };
       toast.error(body.error || "Couldn't move the event.");
-      return;
+      return false;
     }
     const body = (await res.json().catch(() => ({}))) as { event?: CalendarEventRow };
     if (body.event) setCalEvents((rows) => rows.map((r) => (r.id === id ? body.event! : r)));
+    return true;
   }
 
   /** Resize a shoot from the bottom edge: saved straight away (owner/admin: manual override). */
@@ -1644,6 +1645,71 @@ export function ShootCalendar({
     }
   }
 
+  // Resizing asks first, like a move: the new length shows until Confirm or Cancel.
+  const [pendingResize, setPendingResize] = useState<{
+    item: WeekItem;
+    title: string;
+    startIso: string;
+    fromEndIso: string;
+    toEndIso: string;
+  } | null>(null);
+  const [resizeSaving, setResizeSaving] = useState(false);
+
+  function requestResize(item: WeekItem, endIso: string) {
+    if (pendingResize) return;
+    if (item.kind === "shoot") {
+      const shoot = item.shoot;
+      const fromEnd = shoot.end_at || new Date(Date.parse(shoot.proposed_at) + shootMinutes(shoot.proposed_at, shoot.end_at) * 60_000).toISOString();
+      setEnds((m) => ({ ...m, [shoot.id]: endIso }));
+      setPendingResize({ item, title: `${shoot.client_name} - ${shoot.project_name}`, startIso: shoot.proposed_at, fromEndIso: fromEnd, toEndIso: endIso });
+      return;
+    }
+    const id = item.event.id.slice(SP_EVENT_PREFIX.length);
+    const fromEnd = item.event.end || item.event.start;
+    setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: endIso } : r)));
+    setPendingResize({ item, title: item.event.title, startIso: item.event.start, fromEndIso: fromEnd, toEndIso: endIso });
+  }
+
+  function cancelResize() {
+    if (!pendingResize || resizeSaving) return;
+    const { item, fromEndIso } = pendingResize;
+    if (item.kind === "shoot") {
+      setEnds((m) => {
+        const next = { ...m };
+        delete next[item.shoot.id];
+        return next;
+      });
+    } else {
+      const id = item.event.id.slice(SP_EVENT_PREFIX.length);
+      setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: fromEndIso } : r)));
+    }
+    setPendingResize(null);
+  }
+
+  async function confirmResize() {
+    if (!pendingResize || resizeSaving) return;
+    const { item, toEndIso } = pendingResize;
+    setResizeSaving(true);
+    try {
+      if (item.kind === "shoot") await resizeShoot(item.shoot, toEndIso);
+      else if (!(await patchCalendarEvent(item.event, item.event.start, toEndIso))) {
+        const id = item.event.id.slice(SP_EVENT_PREFIX.length);
+        setCalEvents((rows) => rows.map((r) => (r.id === id ? { ...r, end_at: pendingResize.fromEndIso } : r)));
+      }
+    } finally {
+      setResizeSaving(false);
+      setPendingResize(null);
+    }
+  }
+
+  const resizeLabel = (startIso: string, endIso: string) => {
+    const minutes = Math.round((Date.parse(endIso) - Date.parse(startIso)) / 60_000);
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const length = h && m ? `${h} hr ${m} min` : h ? `${h} hr` : `${m} min`;
+    return `${formatTimeRange(startIso, minutes, businessTimeZone)} (${length})`;
+  };
+
   const weekResize: ResizeApi<WeekItem> = {
     canResize: (item) => {
       if (item.allDay) return false;
@@ -1652,9 +1718,7 @@ export function ShootCalendar({
       return canEditEvent(item.event) && item.event.dayKeys.length === 1;
     },
     commit: (item, endMin) => {
-      const endIso = zonedTimeToIso(item.dayKey, endMin, businessTimeZone);
-      if (item.kind === "shoot") void resizeShoot(item.shoot, endIso);
-      else void patchCalendarEvent(item.event, item.event.start, endIso);
+      requestResize(item, zonedTimeToIso(item.dayKey, endMin, businessTimeZone));
     },
   };
 
@@ -2343,6 +2407,32 @@ export function ShootCalendar({
         )}
       </Modal>
 
+      <RescheduleConfirmModal
+        open={!!pendingResize}
+        heading={pendingResize?.item.kind === "shoot" ? "Change Shoot Length?" : "Change Event Length?"}
+        confirmLabel="Confirm Change"
+        savingLabel="Saving…"
+        title={pendingResize?.title ?? ""}
+        fromLabel=""
+        toLabel=""
+        body={
+          pendingResize ? (
+            <p>
+              Change <strong className="text-heading">{pendingResize.title}</strong> from{" "}
+              <strong className="text-heading">{resizeLabel(pendingResize.startIso, pendingResize.fromEndIso)}</strong> to{" "}
+              <strong className="text-heading">{resizeLabel(pendingResize.startIso, pendingResize.toEndIso)}</strong>?
+            </p>
+          ) : null
+        }
+        note={
+          pendingResize?.item.kind === "shoot"
+            ? "Google / Outlook Calendar update with the new end time."
+            : "Your Google / Outlook calendar copy updates too."
+        }
+        saving={resizeSaving}
+        onCancel={cancelResize}
+        onConfirm={() => void confirmResize()}
+      />
       <RescheduleConfirmModal
         open={!!pendingMove}
         title={pendingMove ? `${pendingMove.shoot.client_name} - ${pendingMove.shoot.project_name}` : ""}
