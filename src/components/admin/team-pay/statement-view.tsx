@@ -104,13 +104,18 @@ function DurationField({ minutes, onChange, label }: { minutes: number; onChange
 /** (i) beside the drive fields: what the total is made of, leg by leg. */
 function DriveInfo({ line }: { line: PayLine }) {
   return (
-    <InfoTip label="What's counted in the drive">
-      <span className="block font-medium text-heading">Enter the total for this shoot</span>
-      <span className="mt-1 block text-muted">Every drive counted for this shoot, added together. Each leg below is one way.</span>
+    <InfoTip label="What to enter for driving">
+      <span className="block font-medium text-heading">Enter the whole trip, not one way</span>
+      <span className="mt-1 block text-muted">
+        Add up all the driving you&apos;re paying for. A shoot 15 mi from home, driven there and back, is 15 + 15 = <strong className="text-heading">30 mi</strong>.
+      </span>
       {line.driveLegs?.length ? (
-        <DriveLegList legs={line.driveLegs} className="mt-2 rounded-lg bg-subtle px-2.5 py-2" />
+        <>
+          <span className="mt-2 block text-xs font-medium text-muted">Planned for this shoot</span>
+          <DriveLegList legs={line.driveLegs} showTotal className="mt-1 rounded-lg bg-subtle px-2.5 py-2" />
+        </>
       ) : (
-        <span className="mt-2 block rounded-lg bg-subtle px-2.5 py-2 text-muted">No planned route for this shoot. Enter what they drove.</span>
+        <span className="mt-2 block rounded-lg bg-subtle px-2.5 py-2 text-muted">No planned route for this shoot. Enter everything they drove for it, there and back.</span>
       )}
     </InfoTip>
   );
@@ -158,14 +163,14 @@ function ShootEditor({ line, onSave, onCancel }: { line: PayLine; onSave: (patch
         </label>
         <div className="space-y-1">
           <span className="flex h-5 items-center gap-1 text-xs font-medium text-muted">
-            Driving <span className="font-normal">· total for this shoot</span>
+            Driving <span className="font-normal">· whole trip</span>
             <DriveInfo line={line} />
           </span>
-          <DurationField label="Driving, total for this shoot" minutes={drive} onChange={setDrive} />
+          <DurationField label="Driving, whole trip" minutes={drive} onChange={setDrive} />
         </div>
         <div className="space-y-1">
           <span className="flex h-5 items-center gap-1 text-xs font-medium text-muted">
-            Miles <span className="font-normal">· total for this shoot</span>
+            Miles <span className="font-normal">· whole trip</span>
             <DriveInfo line={line} />
           </span>
           <span className="flex items-center gap-2">
@@ -173,7 +178,7 @@ function ShootEditor({ line, onSave, onCancel }: { line: PayLine; onSave: (patch
               type="number"
               min={0}
               step={0.1}
-              aria-label="Miles, total for this shoot"
+              aria-label="Miles, whole trip"
               value={miles}
               onChange={(e) => setMiles(e.target.value)}
               className="h-11 w-28 rounded-lg border border-border bg-white px-3 text-sm text-foreground surface-dark:bg-card"
@@ -181,11 +186,11 @@ function ShootEditor({ line, onSave, onCancel }: { line: PayLine; onSave: (patch
             <span className="text-sm text-muted">mi</span>
           </span>
         </div>
-        {plannedTrip ? (
-          <p className="text-xs text-muted sm:col-span-2">
-            Planned: {plannedTrip} ({formatMinutes(plannedLegMinutes)} · {formatMilesShort(plannedLegMiles)}). If they drove somewhere else too, add it in.
-          </p>
-        ) : null}
+        <p className="text-xs text-muted sm:col-span-2">
+          {plannedTrip
+            ? `Planned: ${formatMilesShort(plannedLegMiles)} · ${formatMinutes(plannedLegMinutes)} in all (${plannedTrip}). If they drove somewhere else too, add it in.`
+            : "Add every leg together. 15 mi there and 15 mi back means 30 mi."}
+        </p>
       </div>
       <input
         value={note}

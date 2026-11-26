@@ -22,11 +22,14 @@ function Stop({ label }: { label: string }) {
 }
 
 /** Each counted drive as "Home → Shoot · 30 min · 15 mi", so nobody has to guess one way or round trip. */
-export function DriveLegList({ legs, className }: { legs: DriveLeg[]; className?: string }) {
+export function DriveLegList({ legs, className, showTotal = false }: { legs: DriveLeg[]; className?: string; showTotal?: boolean }) {
+  const totalMinutes = legs.reduce((sum, l) => sum + l.minutes, 0);
+  const totalMiles = legs.reduce((sum, l) => sum + l.miles, 0);
   return (
     <ul className={cn("space-y-1", className)}>
-      {legs.map((leg) => (
+      {legs.map((leg, i) => (
         <li key={leg.kind} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+          {showTotal && i > 0 ? <span className="w-3 text-muted">+</span> : showTotal ? <span className="w-3" /> : null}
           <Stop label={FROM[leg.kind].from} />
           <ArrowRight className="h-3.5 w-3.5 text-muted" aria-hidden />
           <Stop label={FROM[leg.kind].to} />
@@ -35,6 +38,12 @@ export function DriveLegList({ legs, className }: { legs: DriveLeg[]; className?
           </span>
         </li>
       ))}
+      {showTotal && legs.length > 1 ? (
+        <li className="flex items-center gap-x-1.5 border-t border-border pt-1 text-sm font-medium text-heading">
+          <span className="w-3 text-muted">=</span>
+          Enter {formatMilesShort(totalMiles)} · {formatMinutes(totalMinutes)}
+        </li>
+      ) : null}
     </ul>
   );
 }
