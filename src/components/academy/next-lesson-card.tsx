@@ -20,7 +20,7 @@ export function NextLessonCard() {
       setDismissed(false);
     }
   }, []);
-  if (!a.ready || dismissed || !a.next || a.certificate) return null;
+  if (!a.ready || dismissed || !a.next || a.certified) return null;
   const next = a.next;
 
   function dismiss() {

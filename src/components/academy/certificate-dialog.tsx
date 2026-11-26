@@ -63,7 +63,7 @@ export function CertificateDocument({
             ) : (
               "has completed "
             )}
-            all {ACADEMY_LESSON_COUNT} lessons of ShootPortal Academy and is a{" "}
+            all {cert?.lessonCount ?? ACADEMY_LESSON_COUNT} lessons of ShootPortal Academy and is a{" "}
             <b className="text-accent">ShootPortal Certified</b> operator.
           </p>
           <div className="mt-8 flex flex-col items-center gap-4 text-xs text-slate-500 sm:flex-row sm:items-end sm:justify-between sm:text-left">
@@ -161,7 +161,7 @@ export function CertificateDialog({
             </h2>
             <p className="text-sm text-muted">
               {cert
-                ? `You finished all ${ACADEMY_LESSON_COUNT} lessons of ShootPortal Academy.`
+                ? `You finished all ${cert.lessonCount} lessons of ShootPortal Academy.`
                 : `Finish ${remaining} more lesson${remaining === 1 ? "" : "s"} to earn it. Here's what it will look like.`}
             </p>
           </div>

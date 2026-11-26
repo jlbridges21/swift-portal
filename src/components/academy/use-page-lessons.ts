@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { lessonsForLocation, type PageLessons } from "@/lib/academy/page-lessons";
+import { academyLessonByKey } from "@/lib/academy/catalog";
 
 /**
  * The Academy lesson(s) for the page on screen. Project tabs and Settings sections change the
@@ -24,13 +25,19 @@ export function usePageLessons(): PageLessons {
     const later = () => window.setTimeout(read, 60);
     window.addEventListener("hashchange", read);
     window.addEventListener("popstate", read);
+    window.addEventListener("sp:location", read);
     document.addEventListener("click", later, true);
     return () => {
       window.removeEventListener("hashchange", read);
       window.removeEventListener("popstate", read);
+      window.removeEventListener("sp:location", read);
       document.removeEventListener("click", later, true);
     };
   }, [pathname]);
 
-  return lessonsForLocation(pathname, loc.search, loc.hash);
+  // A lesson that isn't in the catalog yet (e.g. a video still being published) falls back to
+  // the next related lesson, so the help menu never ends up empty.
+  const raw = lessonsForLocation(pathname, loc.search, loc.hash);
+  const keys = [raw.primary, ...raw.related].filter((k): k is string => Boolean(k && academyLessonByKey(k)));
+  return { primary: keys[0] ?? null, related: keys.slice(1) };
 }

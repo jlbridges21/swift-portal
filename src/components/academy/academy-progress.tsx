@@ -117,6 +117,11 @@ export type AcademySummary = {
   setupRequired: boolean;
   lessons: Record<string, AcademyLessonProgress>;
   certificate: AcademyCertificate | null;
+  /**
+   * True only when a certificate exists AND every current lesson is done. Lessons get added over
+   * time, so an older certificate alone never counts as "finished everything".
+   */
+  certified: boolean;
   completed: number;
   total: number;
   percent: number;
@@ -148,6 +153,7 @@ export function useAcademy(initial?: AcademyProgressState | null): AcademySummar
       setupRequired: Boolean(state?.setupRequired),
       lessons,
       certificate: state?.certificate ?? null,
+      certified: Boolean(state?.certificate) && completed >= ACADEMY_LESSON_COUNT,
       completed,
       total: ACADEMY_LESSON_COUNT,
       percent: Math.round((completed / ACADEMY_LESSON_COUNT) * 100),

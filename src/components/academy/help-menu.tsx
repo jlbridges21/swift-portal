@@ -90,7 +90,7 @@ export function HelpMenu({ className }: { className?: string }) {
           ) : null}
           <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Learn</p>
           <Link href="/admin/academy" role="menuitem" className={cn(item, "items-start")}>
-            {a.certificate ? (
+            {a.certified ? (
               <Award className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
             ) : (
               <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden />
@@ -98,7 +98,7 @@ export function HelpMenu({ className }: { className?: string }) {
             <span className="min-w-0 flex-1">
               <span className="block font-semibold text-heading">ShootPortal Academy</span>
               <span className="block text-xs text-muted">
-                {a.certificate ? "Certified · all lessons complete" : `${a.completed} of ${a.total} lessons · ${a.percent}%`}
+                {a.certified ? "Certified · all lessons complete" : `${a.completed} of ${a.total} lessons · ${a.percent}%`}
               </span>
               <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-border/70">
                 <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${a.percent}%` }} />

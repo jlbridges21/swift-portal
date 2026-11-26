@@ -394,16 +394,18 @@ export function AcademyCourse({
       <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[320px]">
         <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-center">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-accent-subtle to-transparent" aria-hidden />
-          <CertificateMedal percent={a.certificate ? 100 : a.percent} locked={!a.certificate} />
+          <CertificateMedal percent={a.certified ? 100 : a.percent} locked={!a.certified} />
           <h3 className="relative mt-3 text-base font-extrabold text-heading">ShootPortal Certified</h3>
           <p className="relative mt-1.5 text-sm leading-relaxed text-muted">
-            {a.certificate
+            {a.certified
               ? "You earned it. Download it, add it to LinkedIn, or share the verify link."
-              : a.completed === a.total
+              : a.certificate
+                ? `New lessons were added. Watch the ${a.total - a.completed} new one${a.total - a.completed === 1 ? "" : "s"} to finish the course again.`
+                : a.completed === a.total
                 ? "You finished every lesson. Claim your certificate."
                 : `Finish all ${a.total} lessons to earn your certificate and add it to LinkedIn.`}
           </p>
-          {!a.certificate ? (
+          {!a.certified ? (
             <div className="relative mt-4">
               <div className="h-2 overflow-hidden rounded-full bg-border/70">
                 <div className="h-full rounded-full bg-emerald-500" style={{ width: `${a.percent}%` }} />

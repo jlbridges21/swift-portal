@@ -336,6 +336,18 @@ export function AdminSettingsClient({
   useEffect(() => {
     selectRef.current = selectSection;
   });
+  // Keep #settings-<section> in the URL for whichever section is showing (including one restored
+  // on load), so the help menu's "Watch how" lesson matches the section on screen.
+  useEffect(() => {
+    const hash = sections.find((s) => s.id === section)?.hashes[0];
+    if (!hash) return;
+    const current = window.location.hash.replace(/^#/, "");
+    const owned = sections.find((s) => s.id === section)?.hashes.some((h) => current === h || current.startsWith(`${h}-`));
+    if (owned) return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${hash}`);
+    window.dispatchEvent(new Event("sp:location"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
 
   // New interface: the Business Website editor lives at Sites → Business Website. Settings
   // links/hashes to it hand off there so there is only ever one place it is edited.

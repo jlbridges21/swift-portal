@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export function AcademyRing({ className }: { className?: string }) {
   const a = useAcademy();
   if (!a.ready) return null;
-  if (a.certificate) {
+  if (a.certified) {
     return (
       <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white", className)} title="ShootPortal Certified">
         <Award className="h-3.5 w-3.5" aria-hidden />

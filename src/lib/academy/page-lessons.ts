@@ -18,7 +18,9 @@ function settingsLesson(hash: string): PageLessons {
   if (is("settings-website", "settings-landing")) return { primary: "V13", related: ["V02"] };
   if (is("settings-automated-emails", "settings-workflow")) return { primary: "V14", related: [] };
   if (is("settings-notifications")) return { primary: "V15", related: [] };
-  if (is("settings-staff", "settings-staff-permissions", "settings-tax", "settings-integrations")) return { primary: "V16", related: ["V08"] };
+  // Team: Staff & Permissions, Team & Availability and Team pay all lead with the team video.
+  if (is("settings-team-pay", "settings-team", "settings-staff", "settings-staff-permissions")) return { primary: "V21", related: ["V16", "V08"] };
+  if (is("settings-tax", "settings-integrations")) return { primary: "V16", related: ["V08"] };
   if (is("settings-media-section-defaults", "settings-new-project-setup")) return { primary: "V06", related: [] };
   return { primary: "V01", related: ["V02", "V03", "V04"] };
 }
@@ -33,7 +35,7 @@ function projectLesson(tab: string | null): PageLessons {
     case "marketing":
       return { primary: "V12", related: ["V11"] };
     case "details":
-      return { primary: "V08", related: ["V16"] };
+      return { primary: "V08", related: ["V21", "V16"] };
     default:
       // Media is the default tab: the project page's own lesson (upload → share → paid →
       // Download All). Uploading/organizing media stays one click away under "related".
@@ -52,7 +54,8 @@ export function lessonsForLocation(pathname: string, search: string, hash: strin
   if (/^\/admin\/projects\/[^/]+/.test(p)) return projectLesson(tab);
   if (p.startsWith("/admin/projects")) return { primary: "V06", related: ["V00"] };
   if (p.startsWith("/admin/clients")) return { primary: "V05", related: [] };
-  if (p.startsWith("/admin/calendar")) return { primary: "V08", related: [] };
+  if (p.startsWith("/admin/calendar")) return { primary: "V08", related: ["V21"] };
+  if (p.startsWith("/admin/team-pay") || p.startsWith("/admin/my-pay")) return { primary: "V21", related: ["V16"] };
   if (p.startsWith("/admin/media")) return { primary: "V10", related: [] };
   if (p.startsWith("/admin/messages")) return { primary: "V14", related: [] };
   if (p.startsWith("/admin/sites/property")) return { primary: "V12", related: [] };

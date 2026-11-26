@@ -205,9 +205,11 @@ export function AppointmentModal({
           </span>
           <div className="min-w-0 flex-1">
             <h2 id="appt-title" className="text-lg font-bold tracking-tight text-heading sm:text-xl">
-              {mode === "reschedule" ? "Reschedule shoot" : "Scheduled shoot details"}
+              {mode === "reschedule" ? (appt ? "Reschedule shoot" : "Schedule shoot") : appt ? "Scheduled shoot details" : "Shoot details"}
             </h2>
-            <p className="hidden text-sm text-muted sm:block">View and manage this shoot: assignment, route and timing.</p>
+            <p className="hidden text-sm text-muted sm:block">
+              {appt ? "View and manage this shoot: assignment, route and timing." : "Pick a day and time. ShootPortal suggests the best photographer and works out the drive."}
+            </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 rounded-lg border border-border p-2 text-muted hover:text-heading">
             <X className="h-5 w-5" />
